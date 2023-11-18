@@ -1930,6 +1930,8 @@ dependencies = [
  "clap",
  "client-backend",
  "iced",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
