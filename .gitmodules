@@ -1,0 +1,3 @@
+[submodule "client-backend"]
+	path = client-backend
+	url = git@github.com:MegaAntiCheat/client-backend.git
