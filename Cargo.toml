@@ -11,6 +11,7 @@ client-backend = { path = "../client-backend" }
 iced = { version = "0.10.0", features = ["tokio"] }
 serde = "1.0.192"
 serde_json = "1.0.108"
+tokio = "1.34.0"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
