@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 clap = "4.4.8"
-client-backend = { path = "client-backend" }
+client-backend = { path = "../client-backend" }
 iced = { version = "0.10.0", features = ["tokio"] }
 serde = "1.0.192"
 serde_json = "1.0.108"
