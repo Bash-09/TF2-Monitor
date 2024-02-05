@@ -13,12 +13,11 @@ use crate::{App, IcedContainer};
 #[must_use]
 pub fn view(state: &App) -> IcedContainer<'_> {
     let mut players: Vec<(SteamID, &GameInfo)> = state
-        .client
         .mac
         .players
         .connected
         .iter()
-        .filter_map(|p| state.client.mac.players.game_info.get(p).map(|gi| (*p, gi)))
+        .filter_map(|p| state.mac.players.game_info.get(p).map(|gi| (*p, gi)))
         .collect();
     players.sort_by(|&(_, p1), &(_, p2)| p1.time.cmp(&p2.time));
 

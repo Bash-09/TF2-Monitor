@@ -1,5 +1,7 @@
+use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
-    widget::{column, row, Button, Container, Rule},
+    theme,
+    widget::{self, column, row, Button, Container, PickList, Rule, Tooltip},
     Length,
 };
 
@@ -21,6 +23,61 @@ pub enum View {
     Records,
 }
 
+pub const FONT_SIZE: u16 = 13;
+pub const PFP_FULL_SIZE: u16 = 184;
+pub const PFP_SMALL_SIZE: u16 = 28;
+
+pub const VERDICT_OPTIONS: &[Verdict] = &[
+    Verdict::Trusted,
+    Verdict::Player,
+    Verdict::Suspicious,
+    Verdict::Cheater,
+    Verdict::Bot,
+];
+
+#[must_use]
+pub fn open_profile_button<'a>(
+    button_text: impl ToString,
+    steamid: SteamID,
+) -> Tooltip<'a, Message> {
+    Tooltip::new(
+        Button::new(widget::text(button_text).size(FONT_SIZE)).on_press(Message::Open(
+            format!("https://steamcommunity.com/profiles/{}", u64::from(steamid)).into(),
+        )),
+        "Open Profile",
+        iced::widget::tooltip::Position::Bottom,
+    )
+    .size(FONT_SIZE)
+    .style(theme::Container::Box)
+}
+
+#[must_use]
+pub fn copy_button_with_text<'a>(button_text: impl ToString) -> Tooltip<'a, Message> {
+    let copy = button_text.to_string();
+    Tooltip::new(
+        Button::new(widget::text(button_text).size(FONT_SIZE))
+            .on_press(Message::CopyToClipboard(copy)),
+        "Copy",
+        widget::tooltip::Position::Bottom,
+    )
+    .size(FONT_SIZE)
+    .style(theme::Container::Box)
+}
+
+#[must_use]
+pub fn copy_button<'a>(to_copy: String) -> Button<'a, Message> {
+    Button::new(widget::text("Copy").size(FONT_SIZE)).on_press(Message::CopyToClipboard(to_copy))
+}
+
+#[must_use]
+pub fn verdict_picker<'a>(verdict: Verdict, steamid: SteamID) -> PickList<'a, Verdict, Message> {
+    PickList::new(VERDICT_OPTIONS, Some(verdict), move |v| {
+        crate::Message::ChangeVerdict(steamid, v)
+    })
+    .width(100)
+    .text_size(FONT_SIZE)
+}
+
 #[must_use]
 pub fn main_window(state: &App) -> IcedContainer<'_> {
     // Right panel is either chat + killfeed or the currently selected player
@@ -40,7 +97,7 @@ pub fn main_window(state: &App) -> IcedContainer<'_> {
             },
             |p| player::view(state, p, &state.pfp_cache),
         )
-        .width(Length::FillPortion(1))
+        .width(Length::FillPortion(2))
         .height(Length::Fill);
 
     // Rest of the view
@@ -53,7 +110,7 @@ pub fn main_window(state: &App) -> IcedContainer<'_> {
             View::Settings => settings::view(state),
             View::Records => records::view(state),
         }
-        .width(Length::FillPortion(3))
+        .width(Length::FillPortion(5))
         .height(Length::Fill),
         Rule::vertical(1),
         right_panel,
@@ -73,7 +130,8 @@ pub fn view_select(_: &App) -> IcedContainer<'_> {
         Button::new("History").on_press(Message::SetView(View::History)),
         Button::new("Records").on_press(Message::SetView(View::Records)),
         Button::new("Settings").on_press(Message::SetView(View::Settings)),
-    ];
+    ]
+    .spacing(10);
 
     Container::new(content).height(Length::Fill).padding(10)
 }

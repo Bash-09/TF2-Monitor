@@ -24,6 +24,9 @@ use iced::{
 };
 use settings::{AppSettings, SETTINGS_IDENTIFIER};
 
+pub const ALIAS_KEY: &str = "alias";
+pub const NOTES_KEY: &str = "playerNote";
+
 pub mod gui;
 pub mod settings;
 pub mod style;
@@ -84,7 +87,8 @@ pub struct Client {
 type IcedContainer<'a> = Container<'a, Message, iced::Renderer<iced::Theme>>;
 
 pub struct App {
-    client: Client,
+    mac: MACState,
+    event_loop: EventLoop<MACState, MACMessage, MACHandler>,
     settings: AppSettings,
 
     // UI State
@@ -104,6 +108,7 @@ pub enum Message {
     UnselectPlayer,
     CopyToClipboard(String),
     ChangeVerdict(SteamID, Verdict),
+    ChangeNotes(SteamID, String),
     Open(Arc<str>),
     MAC(MACMessage),
 }
@@ -112,13 +117,18 @@ impl Application for App {
     type Executor = iced::executor::Default;
     type Message = Message;
     type Theme = iced::Theme;
-    type Flags = (Client, AppSettings);
+    type Flags = (
+        MACState,
+        EventLoop<MACState, MACMessage, MACHandler>,
+        AppSettings,
+    );
 
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         (
             Self {
-                client: flags.0,
-                settings: flags.1,
+                mac: flags.0,
+                event_loop: flags.1,
+                settings: flags.2,
 
                 view: View::Server,
                 selected_player: None,
@@ -135,7 +145,6 @@ impl Application for App {
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
         let log_file_path = self
-            .client
             .mac
             .settings
             .get_tf2_directory()
@@ -181,7 +190,32 @@ impl Application for App {
             Message::EventOccurred(_) => {}
             Message::SetView(v) => self.view = v,
             Message::ChangeVerdict(steamid, verdict) => self.update_verdict(steamid, verdict),
-            Message::SelectPlayer(steamid) => self.selected_player = Some(steamid),
+            Message::ChangeNotes(steamid, notes) => self.update_notes(steamid, notes),
+            Message::SelectPlayer(steamid) => {
+                self.selected_player = Some(steamid);
+
+                // Request steam lookup of player if we don't have it currently
+                if !self.mac.players.steam_info.contains_key(&steamid) {
+                    let mut commands = Vec::new();
+
+                    for a in self.event_loop.handle_message(
+                        MACMessage::NewPlayers(NewPlayers(vec![steamid])),
+                        &mut self.mac,
+                    ) {
+                        match a {
+                            event_loop::Action::Message(_) => {}
+                            event_loop::Action::Future(f) => {
+                                commands.push(iced::Command::perform(
+                                    f.map(|m| m.unwrap_or(MACMessage::None)),
+                                    Message::MAC,
+                                ));
+                            }
+                        }
+                    }
+
+                    return iced::Command::batch(commands);
+                }
+            }
             Message::UnselectPlayer => self.selected_player = None,
             Message::PfpLookupResponse(pfp_hash, response) => {
                 if let Ok(bytes) = response {
@@ -195,42 +229,7 @@ impl Application for App {
                 }
             }
             Message::MAC(m) => {
-                let mut commands = Vec::new();
-
-                let mut messages = vec![m];
-                while let Some(m) = messages.pop() {
-                    // Request pfps
-                    if let MACMessage::ProfileLookupResult(ProfileLookupResult(Ok(new_info))) = &m {
-                        for (_, result) in new_info {
-                            if let Ok(si) = result {
-                                commands.push(
-                                    self.request_pfp_lookup(
-                                        si.pfp_hash.clone(),
-                                        si.pfp_url.clone(),
-                                    ),
-                                );
-                            }
-                        }
-                    }
-
-                    for a in self
-                        .client
-                        .mac_event_handler
-                        .handle_message(m, &mut self.client.mac)
-                    {
-                        match a {
-                            event_loop::Action::Message(m) => messages.push(m),
-                            event_loop::Action::Future(f) => {
-                                commands.push(iced::Command::perform(
-                                    f.map(|m| m.unwrap_or(MACMessage::None)),
-                                    Message::MAC,
-                                ));
-                            }
-                        }
-                    }
-                }
-
-                return iced::Command::batch(commands);
+                return self.handle_mac_message(m);
             }
         };
 
@@ -244,7 +243,7 @@ impl Application for App {
 
 impl App {
     fn save_settings(&mut self) {
-        let settings = &mut self.client.mac.settings;
+        let settings = &mut self.mac.settings;
         let mut external_settings = settings.get_external_preferences().clone();
         if !external_settings.is_object() {
             external_settings = serde_json::Value::Object(serde_json::Map::new());
@@ -256,9 +255,57 @@ impl App {
     }
 
     fn update_verdict(&mut self, steamid: SteamID, verdict: Verdict) {
-        let record = self.client.mac.players.records.entry(steamid).or_default();
+        let record = self.mac.players.records.entry(steamid).or_default();
         record.verdict = verdict;
-        self.client.mac.players.records.save_ok();
+
+        self.mac.players.records.prune();
+        self.mac.players.records.save_ok();
+    }
+
+    fn update_notes(&mut self, steamid: SteamID, notes: String) {
+        let record = self.mac.players.records.entry(steamid).or_default();
+        if !record.custom_data.is_object() {
+            record.custom_data = serde_json::Value::Object(serde_json::Map::new());
+        }
+        record
+            .custom_data
+            .as_object_mut()
+            .expect("Just ensured it was an object.")
+            .insert(NOTES_KEY.to_string(), serde_json::Value::String(notes));
+
+        self.mac.players.records.prune();
+        self.mac.players.records.save_ok();
+    }
+
+    fn handle_mac_message(&mut self, message: MACMessage) -> iced::Command<Message> {
+        let mut commands = Vec::new();
+
+        let mut messages = vec![message];
+        while let Some(m) = messages.pop() {
+            // Request pfps
+            if let MACMessage::ProfileLookupResult(ProfileLookupResult(Ok(new_info))) = &m {
+                for (_, result) in new_info {
+                    if let Ok(si) = result {
+                        commands
+                            .push(self.request_pfp_lookup(si.pfp_hash.clone(), si.pfp_url.clone()));
+                    }
+                }
+            }
+
+            for a in self.event_loop.handle_message(m, &mut self.mac) {
+                match a {
+                    event_loop::Action::Message(m) => messages.push(m),
+                    event_loop::Action::Future(f) => {
+                        commands.push(iced::Command::perform(
+                            f.map(|m| m.unwrap_or(MACMessage::None)),
+                            Message::MAC,
+                        ));
+                    }
+                }
+            }
+        }
+
+        iced::Command::batch(commands)
     }
 
     fn insert_new_pfp(&mut self, pfp_hash: Arc<str>, bytes: Bytes) {
@@ -316,18 +363,14 @@ fn main() {
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let mac_event_handler = EventLoop::new()
+    let event_loop = EventLoop::new()
         .add_handler(CommandManager::new())
         .add_handler(ConsoleParser::default())
         .add_handler(ExtractNewPlayers)
         .add_handler(LookupProfiles::new())
         .add_handler(LookupFriends::new());
 
-    let client = Client {
-        mac,
-        mac_event_handler,
-    };
-    let mut iced_settings = iced::Settings::with_flags((client, app_settings.clone()));
+    let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));
     if let Some(pos) = app_settings.window_pos {
         iced_settings.window.position = iced::window::Position::Specific(pos.0, pos.1);
     }
