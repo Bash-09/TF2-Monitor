@@ -5,9 +5,7 @@ use clap::Parser;
 use client_backend::{
     args::Args,
     console::ConsoleLog,
-    event_loop::{
-        self, define_handlers, define_messages, EventLoop, Handled, HandlerStruct, StateUpdater,
-    },
+    event_loop::{self, define_events, EventLoop},
     player::Players,
     player_records::{PlayerRecords, Verdict},
     server::Server,
@@ -43,22 +41,35 @@ use client_backend::{
     },
 };
 
-define_messages!(MACMessage<MACState>:
-    Refresh,
+define_events!(
+    MACState,
+    MACMessage {
+        Refresh,
 
-    Command,
+        Command,
 
-    RawConsoleOutput,
-    ConsoleOutput,
+        RawConsoleOutput,
+        ConsoleOutput,
 
-    NewPlayers,
+        NewPlayers,
 
-    ProfileLookupBatchTick,
-    ProfileLookupResult,
-    FriendLookupResult,
+        ProfileLookupBatchTick,
+        ProfileLookupResult,
+        FriendLookupResult,
 
-    Preferences,
-    UserUpdates
+        Preferences,
+        UserUpdates,
+    },
+    MACHandler {
+        CommandManager,
+
+        ConsoleParser,
+
+        ExtractNewPlayers,
+
+        LookupProfiles,
+        LookupFriends,
+    },
 );
 
 impl Clone for MACMessage {
@@ -67,17 +78,6 @@ impl Clone for MACMessage {
         Self::None
     }
 }
-
-define_handlers!(MACHandler<MACState, MACMessage>:
-    CommandManager,
-
-    ConsoleParser,
-
-    ExtractNewPlayers,
-
-    LookupProfiles,
-    LookupFriends
-);
 
 pub struct Client {
     pub mac: MACState,
