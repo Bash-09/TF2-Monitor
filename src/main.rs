@@ -5,7 +5,8 @@ use clap::Parser;
 use client_backend::{
     args::Args,
     console::ConsoleLog,
-    event_loop::{self, define_events, EventLoop},
+    demo::DemoWatcher,
+    event_loop::{self, define_events, EventLoop, MessageSource},
     player::Players,
     player_records::{PlayerRecords, Verdict},
     server::Server,
@@ -20,6 +21,7 @@ use iced::{
     widget::Container,
     Application,
 };
+use serde_json::Map;
 use settings::{AppSettings, SETTINGS_IDENTIFIER};
 
 pub const ALIAS_KEY: &str = "alias";
@@ -31,8 +33,9 @@ pub mod style;
 mod tracing_setup;
 
 use client_backend::{
-    command_manager::{Command, CommandManager},
+    command_manager::{Command, CommandManager, DumbAutoKick},
     console::{ConsoleOutput, ConsoleParser, RawConsoleOutput},
+    demo::{DemoBytes, DemoManager, DemoMessage},
     events::{Preferences, Refresh, UserUpdates},
     new_players::{ExtractNewPlayers, NewPlayers},
     steam_api::{
@@ -59,6 +62,9 @@ define_events!(
 
         Preferences,
         UserUpdates,
+
+        DemoBytes,
+        DemoMessage,
     },
     MACHandler {
         CommandManager,
@@ -69,6 +75,9 @@ define_events!(
 
         LookupProfiles,
         LookupFriends,
+
+        DemoManager,
+        DumbAutoKick,
     },
 );
 
@@ -139,17 +148,17 @@ impl Application for App {
         )
     }
 
-    fn title(&self) -> String { String::from("MAC Client") }
+    fn title(&self) -> String {
+        String::from("MAC Client")
+    }
 
-    fn theme(&self) -> iced::Theme { iced::Theme::Dark }
+    fn theme(&self) -> iced::Theme {
+        iced::Theme::Dark
+    }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
-        let log_file_path = self
-            .mac
-            .settings
-            .get_tf2_directory()
-            .to_path_buf()
-            .join("tf/console.log");
+        let log_file_path = self.mac.settings.tf2_directory().join("tf/console.log");
+        let demo_path = self.mac.settings.tf2_directory().join("tf");
 
         iced::Subscription::batch([
             iced::subscription::events().map(Message::EventOccurred),
@@ -173,6 +182,26 @@ impl Application for App {
                         .await;
                 }
             }),
+            iced::subscription::channel(
+                TypeId::of::<DemoWatcher>(),
+                100,
+                |mut output| async move {
+                    match DemoWatcher::new(&demo_path) {
+                        Ok(mut watcher) => loop {
+                            if let Some(m) = watcher.next_message() {
+                                let _ = output.send(Message::MAC(m)).await;
+                            }
+
+                            tokio::task::yield_now().await;
+                        },
+                        Err(e) => tracing::error!("Could not start demo watcher: {e:?}"),
+                    }
+
+                    loop {
+                        tokio::task::yield_now().await;
+                    }
+                },
+            ),
         ])
     }
 
@@ -244,7 +273,7 @@ impl Application for App {
 impl App {
     fn save_settings(&mut self) {
         let settings = &mut self.mac.settings;
-        let mut external_settings = settings.get_external_preferences().clone();
+        let mut external_settings = settings.external_preferences().clone();
         if !external_settings.is_object() {
             external_settings = serde_json::Value::Object(serde_json::Map::new());
         }
@@ -256,7 +285,7 @@ impl App {
 
     fn update_verdict(&mut self, steamid: SteamID, verdict: Verdict) {
         let record = self.mac.players.records.entry(steamid).or_default();
-        record.verdict = verdict;
+        record.set_verdict(verdict);
 
         self.mac.players.records.prune();
         self.mac.players.records.save_ok();
@@ -264,14 +293,10 @@ impl App {
 
     fn update_notes(&mut self, steamid: SteamID, notes: String) {
         let record = self.mac.players.records.entry(steamid).or_default();
-        if !record.custom_data.is_object() {
-            record.custom_data = serde_json::Value::Object(serde_json::Map::new());
-        }
-        record
-            .custom_data
-            .as_object_mut()
-            .expect("Just ensured it was an object.")
-            .insert(NOTES_KEY.to_string(), serde_json::Value::String(notes));
+
+        let mut notes_value = Map::new();
+        notes_value.insert(NOTES_KEY.to_string(), serde_json::Value::String(notes));
+        record.set_custom_data(serde_json::Value::Object(notes_value));
 
         self.mac.players.records.prune();
         self.mac.players.records.save_ok();
@@ -331,7 +356,9 @@ impl App {
 }
 
 impl Drop for App {
-    fn drop(&mut self) { self.save_settings(); }
+    fn drop(&mut self) {
+        self.save_settings();
+    }
 }
 
 fn main() {
@@ -348,7 +375,7 @@ fn main() {
     let playerlist = PlayerRecords::load_or_create(&args);
     playerlist.save_ok();
 
-    let players = Players::new(playerlist, settings.get_steam_user());
+    let players = Players::new(playerlist, settings.steam_user());
 
     let mac = MACState {
         server: Server::new(),
@@ -358,7 +385,7 @@ fn main() {
 
     let app_settings: AppSettings = mac
         .settings
-        .get_external_preferences()
+        .external_preferences()
         .get(SETTINGS_IDENTIFIER)
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
@@ -368,6 +395,7 @@ fn main() {
         .add_handler(ConsoleParser::default())
         .add_handler(ExtractNewPlayers)
         .add_handler(LookupProfiles::new())
+        .add_handler(DemoManager::new())
         .add_handler(LookupFriends::new());
 
     let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));
@@ -379,4 +407,10 @@ fn main() {
     }
 
     App::run(iced_settings).expect("Failed to run app.");
+}
+
+impl std::fmt::Debug for MACMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MACMessage")
+    }
 }

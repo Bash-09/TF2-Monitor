@@ -18,7 +18,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         .iter()
         .map(|(s, r)| (*s, r))
         .collect();
-    records.sort_by_key(|(_, r)| r.modified);
+    records.sort_by_key(|(_, r)| r.modified());
 
     for (s, r) in records {
         contents = contents.push(row(state, s, r));
@@ -37,7 +37,7 @@ fn row<'a>(state: &'a App, steamid: SteamID, record: &'a PlayerRecord) -> IcedCo
         .align_items(iced::Alignment::Center);
 
     // Verdict picker
-    contents = contents.push(verdict_picker(record.verdict, steamid));
+    contents = contents.push(verdict_picker(record.verdict(), steamid));
 
     // SteamID
     contents = contents.push(
@@ -48,16 +48,16 @@ fn row<'a>(state: &'a App, steamid: SteamID, record: &'a PlayerRecord) -> IcedCo
     contents = contents.push(open_profile_button("Open", steamid));
 
     #[allow(clippy::option_if_let_else, clippy::manual_map)]
-    let name_text = if let Some(alias) = record.custom_data.get(ALIAS_KEY).and_then(|v| v.as_str())
-    {
-        Some(alias.into())
-    } else if let Some(game_info) = state.mac.players.game_info.get(&steamid) {
-        Some(game_info.name.clone())
-    } else if let Some(steam_info) = state.mac.players.steam_info.get(&steamid) {
-        Some(steam_info.account_name.clone())
-    } else {
-        None
-    };
+    let name_text =
+        if let Some(alias) = record.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()) {
+            Some(alias.into())
+        } else if let Some(game_info) = state.mac.players.game_info.get(&steamid) {
+            Some(game_info.name.clone())
+        } else if let Some(steam_info) = state.mac.players.steam_info.get(&steamid) {
+            Some(steam_info.account_name.clone())
+        } else {
+            None
+        };
 
     if let Some(name_text) = name_text {
         contents = contents.push(Space::with_width(10));

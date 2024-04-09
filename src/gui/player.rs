@@ -1,12 +1,9 @@
 use std::{collections::HashMap, hash::BuildHasher, sync::Arc};
 
-use client_backend::{player::GameInfo, steamid_ng::SteamID};
+use client_backend::{player::GameInfo, player_records::PlayerRecord, steamid_ng::SteamID};
 use iced::{
     theme,
-    widget::{
-        self, column, image::Handle, text::LineHeight, Button, Container, Image, Space, TextInput,
-        Tooltip,
-    },
+    widget::{self, column, image::Handle, Button, Container, Image, Space, TextInput, Tooltip},
     Length,
 };
 
@@ -70,7 +67,7 @@ pub fn view<'a, S: BuildHasher>(
     let maybe_record = state.mac.players.records.get(&player);
     if let Some(record) = maybe_record {
         // Alias
-        if let Some(alias) = record.custom_data.get(ALIAS_KEY).and_then(|v| v.as_str()) {
+        if let Some(alias) = record.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()) {
             name = name.push(Tooltip::new(
                 "☆",
                 alias,
@@ -79,10 +76,10 @@ pub fn view<'a, S: BuildHasher>(
         }
 
         // Previous names
-        if !record.previous_names.is_empty() {
+        if !record.previous_names().is_empty() {
             let mut tooltip = String::new();
             record
-                .previous_names
+                .previous_names()
                 .iter()
                 .for_each(|n| tooltip.push_str(&format!("{n}\n")));
 
@@ -108,7 +105,7 @@ pub fn view<'a, S: BuildHasher>(
 
     // Verdict
     contents = contents.push(verdict_picker(
-        maybe_record.map(|r| r.verdict).unwrap_or_default(),
+        maybe_record.map(PlayerRecord::verdict).unwrap_or_default(),
         player,
     ));
 
@@ -117,7 +114,7 @@ pub fn view<'a, S: BuildHasher>(
         TextInput::new(
             "Notes",
             maybe_record
-                .and_then(|r| r.custom_data.get(NOTES_KEY).and_then(|v| v.as_str()))
+                .and_then(|r| r.custom_data().get(NOTES_KEY).and_then(|v| v.as_str()))
                 .unwrap_or(""),
         )
         .size(FONT_SIZE)
@@ -167,7 +164,7 @@ pub fn row<'a, S: BuildHasher>(
                 .players
                 .records
                 .get(&player)
-                .map(|r| r.verdict)
+                .map(PlayerRecord::verdict)
                 .unwrap_or_default(),
             player
         ),
