@@ -14,7 +14,7 @@ use client_backend::{
     state::MACState,
     steamid_ng::SteamID,
 };
-use gui::View;
+use gui::{records::get_filtered_records, View};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -104,6 +104,12 @@ pub struct App {
     view: View,
     selected_player: Option<SteamID>,
 
+    // records
+    records_per_page: usize,
+    record_page: usize,
+    record_verdict_whitelist: Vec<Verdict>,
+    record_search: String,
+
     pfp_cache: HashMap<Arc<str>, iced::widget::image::Handle>,
 }
 
@@ -120,6 +126,10 @@ pub enum Message {
     ChangeNotes(SteamID, String),
     Open(Arc<str>),
     MAC(MACMessage),
+
+    SetRecordPage(usize),
+    ToggleVerdictFilter(Verdict),
+    SetRecordSearch(String),
 }
 
 impl Application for App {
@@ -141,6 +151,17 @@ impl Application for App {
 
                 view: View::Server,
                 selected_player: None,
+
+                records_per_page: 50,
+                record_page: 0,
+                record_verdict_whitelist: vec![
+                    Verdict::Trusted,
+                    Verdict::Player,
+                    Verdict::Suspicious,
+                    Verdict::Cheater,
+                    Verdict::Bot,
+                ],
+                record_search: String::new(),
 
                 pfp_cache: HashMap::new(),
             },
@@ -192,13 +213,13 @@ impl Application for App {
                                 let _ = output.send(Message::MAC(m)).await;
                             }
 
-                            tokio::task::yield_now().await;
+                            tokio::time::sleep(Duration::from_millis(50)).await;
                         },
                         Err(e) => tracing::error!("Could not start demo watcher: {e:?}"),
                     }
 
                     loop {
-                        tokio::task::yield_now().await;
+                        tokio::time::sleep(Duration::from_millis(50)).await;
                     }
                 },
             ),
@@ -259,6 +280,22 @@ impl Application for App {
             }
             Message::MAC(m) => {
                 return self.handle_mac_message(m);
+            }
+            Message::SetRecordPage(p) => self.record_page = p,
+            Message::ToggleVerdictFilter(v) => {
+                if self.record_verdict_whitelist.contains(&v) {
+                    self.record_verdict_whitelist.retain(|&vv| vv != v);
+                } else {
+                    self.record_verdict_whitelist.push(v);
+                }
+
+                let max_page = get_filtered_records(self).count() / self.records_per_page;
+                self.record_page = self.record_page.min(max_page);
+            }
+            Message::SetRecordSearch(search) => {
+                self.record_search = search;
+                let max_page = get_filtered_records(self).count() / self.records_per_page;
+                self.record_page = self.record_page.min(max_page);
             }
         };
 

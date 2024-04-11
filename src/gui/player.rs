@@ -52,13 +52,7 @@ pub fn view<'a, S: BuildHasher>(
         .spacing(10);
 
     #[allow(clippy::option_if_let_else, clippy::manual_map)]
-    let name_text = if let Some(game_info) = state.mac.players.game_info.get(&player) {
-        Some(game_info.name.clone())
-    } else if let Some(steam_info) = state.mac.players.steam_info.get(&player) {
-        Some(steam_info.account_name.clone())
-    } else {
-        None
-    };
+    let name_text = state.mac.players.get_name(player);
 
     if let Some(name_text) = name_text {
         name = name.push(widget::text(name_text.to_string()));

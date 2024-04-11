@@ -1,33 +1,125 @@
-use client_backend::{player_records::PlayerRecord, steamid_ng::SteamID};
+use client_backend::{
+    player_records::{PlayerRecord, Verdict},
+    steamid_ng::SteamID,
+};
 use iced::{
-    widget::{self, text, Button, Container, Scrollable, Space},
+    widget::{self, text, text_input, Button, Container, Scrollable, Space},
     Length,
 };
 
 use super::{copy_button, open_profile_button, verdict_picker, FONT_SIZE};
-use crate::{App, IcedContainer, ALIAS_KEY};
+use crate::{App, IcedContainer, Message, ALIAS_KEY};
 
-#[must_use]
-pub fn view(state: &App) -> IcedContainer<'_> {
-    let mut contents = widget::column![].spacing(3).padding(15);
-
-    let mut records: Vec<(SteamID, &PlayerRecord)> = state
+#[allow(clippy::module_name_repetitions)]
+pub fn get_filtered_records(state: &App) -> impl Iterator<Item = (SteamID, &PlayerRecord)> {
+    state
         .mac
         .players
         .records
         .iter()
         .map(|(s, r)| (*s, r))
-        .collect();
+        .filter(|(_, r)| state.record_verdict_whitelist.contains(&r.verdict()))
+        .filter(|(s, r)| {
+            if state.record_search.is_empty() {
+                return true;
+            }
+
+            r.previous_names()
+                .iter()
+                .any(|n| n.contains(&state.record_search))
+                || state
+                    .record_search
+                    .parse::<u64>()
+                    .is_ok_and(|_| format!("{}", u64::from(*s)).contains(&state.record_search))
+                || state
+                    .mac
+                    .players
+                    .get_name(*s)
+                    .is_some_and(|n| n.contains(&state.record_search))
+        })
+}
+
+#[must_use]
+pub fn view(state: &App) -> IcedContainer<'_> {
+    let mut records: Vec<(SteamID, &PlayerRecord)> = get_filtered_records(state).collect();
     records.sort_by_key(|(_, r)| r.modified());
 
-    for (s, r) in records {
+    // Pages
+    let num_pages = records.len() / state.records_per_page + 1;
+    let displaying_start = (state.record_page * state.records_per_page + 1).min(records.len());
+    let displaying_end = if state.record_page == num_pages - 1 {
+        (num_pages - 1) * state.records_per_page + records.len() % state.records_per_page
+    } else {
+        (state.record_page + 1) * state.records_per_page
+    };
+
+    let button = |contents: &str| {
+        widget::button(widget::column![text(contents)].align_items(iced::Alignment::Center))
+            .width(30)
+            .height(30)
+    };
+
+    let header = widget::row![
+        widget::horizontal_space(15),
+        button("<<").on_press(Message::SetRecordPage(0)),
+        button("<").on_press(Message::SetRecordPage(state.record_page.saturating_sub(1))),
+        widget::column![text(format!("{}", state.record_page + 1))]
+            .align_items(iced::Alignment::Center)
+            .width(75),
+        button(">").on_press(Message::SetRecordPage(
+            state.record_page.saturating_add(1).min(num_pages - 1)
+        )),
+        button(">>").on_press(Message::SetRecordPage(num_pages - 1)),
+        widget::horizontal_space(Length::Fill),
+        widget::text(format!(
+            "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
+            records.len(),
+            if num_pages == 1 { "page" } else { "pages" }
+        )),
+        widget::horizontal_space(15),
+    ]
+    .spacing(3)
+    .align_items(iced::Alignment::Center);
+
+    let filter_checkbox = |v: Verdict| {
+        widget::checkbox(
+            format!("{v}"),
+            state.record_verdict_whitelist.contains(&v),
+            move |_| Message::ToggleVerdictFilter(v),
+        )
+    };
+
+    let filters = widget::row![
+        filter_checkbox(Verdict::Trusted),
+        filter_checkbox(Verdict::Player),
+        filter_checkbox(Verdict::Suspicious),
+        filter_checkbox(Verdict::Cheater),
+        filter_checkbox(Verdict::Bot),
+        // widget::horizontal_space(Length::Fill),
+        text_input("Search", &state.record_search).on_input(Message::SetRecordSearch),
+    ]
+    .spacing(15)
+    .align_items(iced::Alignment::Center)
+    .padding(15);
+
+    // Records
+    let mut contents = widget::column![].spacing(3).padding(15);
+    for (s, r) in records
+        .into_iter()
+        .skip(state.record_page * state.records_per_page)
+        .take(state.records_per_page)
+    {
         contents = contents.push(row(state, s, r));
     }
 
-    Container::new(Scrollable::new(contents))
-        .width(Length::Fill)
-        .height(Length::Fill)
-    // .padding(15)
+    Container::new(widget::column![
+        widget::vertical_space(15),
+        header,
+        filters,
+        Scrollable::new(contents)
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill)
 }
 
 #[must_use]
@@ -51,12 +143,8 @@ fn row<'a>(state: &'a App, steamid: SteamID, record: &'a PlayerRecord) -> IcedCo
     let name_text =
         if let Some(alias) = record.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()) {
             Some(alias.into())
-        } else if let Some(game_info) = state.mac.players.game_info.get(&steamid) {
-            Some(game_info.name.clone())
-        } else if let Some(steam_info) = state.mac.players.steam_info.get(&steamid) {
-            Some(steam_info.account_name.clone())
         } else {
-            None
+            state.mac.players.get_name(steamid)
         };
 
     if let Some(name_text) = name_text {
