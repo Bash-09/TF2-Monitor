@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::BuildHasher, sync::Arc};
+use std::{collections::HashMap, hash::BuildHasher};
 
 use client_backend::{player::GameInfo, player_records::PlayerRecord, steamid_ng::SteamID};
 use iced::{
@@ -15,7 +15,7 @@ use crate::{App, IcedContainer, Message, ALIAS_KEY, NOTES_KEY};
 pub fn view<'a, S: BuildHasher>(
     state: &'a App,
     player: SteamID,
-    pfp_cache: &'a HashMap<Arc<str>, Handle, S>,
+    pfp_cache: &'a HashMap<String, Handle, S>,
 ) -> IcedContainer<'a> {
     let mut contents = column![].spacing(7);
 
@@ -127,7 +127,7 @@ pub fn row<'a, S: BuildHasher>(
     state: &'a App,
     game_info: &'a GameInfo,
     player: SteamID,
-    pfp_cache: &'a HashMap<Arc<str>, Handle, S>,
+    pfp_cache: &'a HashMap<String, Handle, S>,
 ) -> IcedContainer<'a> {
     // name
     let mut name = widget::row![];

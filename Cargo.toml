@@ -12,7 +12,6 @@ card = "0.1.0"
 clap = "4.4.8"
 client-backend = { path = "../client-backend" }
 iced = { version = "0.10.0", features = ["tokio", "image"] }
-iced_aw = { version = "0.8.0", features = ["tab_bar"] }
 open = "5.0.1"
 reqwest = "0.11.22"
 serde = "1.0.192"

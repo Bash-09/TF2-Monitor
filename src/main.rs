@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap, sync::Arc, time::Duration};
+use std::{any::TypeId, collections::HashMap, time::Duration};
 
 use bytes::Bytes;
 use clap::Parser;
@@ -110,13 +110,13 @@ pub struct App {
     record_verdict_whitelist: Vec<Verdict>,
     record_search: String,
 
-    pfp_cache: HashMap<Arc<str>, iced::widget::image::Handle>,
+    pfp_cache: HashMap<String, iced::widget::image::Handle>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     EventOccurred(Event),
-    PfpLookupResponse(Arc<str>, Result<Bytes, ()>),
+    PfpLookupResponse(String, Result<Bytes, ()>),
 
     SetView(View),
     SelectPlayer(SteamID),
@@ -124,12 +124,14 @@ pub enum Message {
     CopyToClipboard(String),
     ChangeVerdict(SteamID, Verdict),
     ChangeNotes(SteamID, String),
-    Open(Arc<str>),
+    Open(String),
     MAC(MACMessage),
 
     SetRecordPage(usize),
     ToggleVerdictFilter(Verdict),
     SetRecordSearch(String),
+
+    SetKickBots(bool),
 }
 
 impl Application for App {
@@ -297,6 +299,7 @@ impl Application for App {
                 let max_page = get_filtered_records(self).count() / self.records_per_page;
                 self.record_page = self.record_page.min(max_page);
             }
+            Message::SetKickBots(kick) => self.mac.settings.set_autokick_bots(kick),
         };
 
         iced::Command::none()
@@ -370,19 +373,19 @@ impl App {
         iced::Command::batch(commands)
     }
 
-    fn insert_new_pfp(&mut self, pfp_hash: Arc<str>, bytes: Bytes) {
+    fn insert_new_pfp(&mut self, pfp_hash: String, bytes: Bytes) {
         let handle = iced::widget::image::Handle::from_memory(bytes);
         self.pfp_cache.insert(pfp_hash, handle);
     }
 
-    fn request_pfp_lookup(&self, pfp_hash: Arc<str>, pfp_url: Arc<str>) -> iced::Command<Message> {
+    fn request_pfp_lookup(&self, pfp_hash: String, pfp_url: String) -> iced::Command<Message> {
         if self.pfp_cache.contains_key(&pfp_hash) {
             return iced::Command::none();
         }
 
         iced::Command::perform(
             async move {
-                match reqwest::get(&*pfp_url).await {
+                match reqwest::get(&pfp_url).await {
                     Ok(resp) => (pfp_hash, resp.bytes().await.map_err(|_| ())),
                     Err(_) => (pfp_hash, Err(())),
                 }
@@ -395,6 +398,7 @@ impl App {
 impl Drop for App {
     fn drop(&mut self) {
         self.save_settings();
+        self.mac.players.records.save_ok();
     }
 }
 

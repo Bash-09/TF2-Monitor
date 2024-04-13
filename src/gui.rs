@@ -41,9 +41,10 @@ pub fn open_profile_button<'a>(
     steamid: SteamID,
 ) -> Tooltip<'a, Message> {
     Tooltip::new(
-        Button::new(widget::text(button_text).size(FONT_SIZE)).on_press(Message::Open(
-            format!("https://steamcommunity.com/profiles/{}", u64::from(steamid)).into(),
-        )),
+        Button::new(widget::text(button_text).size(FONT_SIZE)).on_press(Message::Open(format!(
+            "https://steamcommunity.com/profiles/{}",
+            u64::from(steamid)
+        ))),
         "Open Profile",
         iced::widget::tooltip::Position::Bottom,
     )

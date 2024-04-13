@@ -142,7 +142,7 @@ fn row<'a>(state: &'a App, steamid: SteamID, record: &'a PlayerRecord) -> IcedCo
     #[allow(clippy::option_if_let_else, clippy::manual_map)]
     let name_text =
         if let Some(alias) = record.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()) {
-            Some(alias.into())
+            Some(alias)
         } else {
             state.mac.players.get_name(steamid)
         };
