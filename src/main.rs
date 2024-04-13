@@ -29,7 +29,6 @@ pub const NOTES_KEY: &str = "playerNote";
 
 pub mod gui;
 pub mod settings;
-pub mod style;
 mod tracing_setup;
 
 use client_backend::{

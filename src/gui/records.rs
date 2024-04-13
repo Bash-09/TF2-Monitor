@@ -42,7 +42,7 @@ pub fn get_filtered_records(state: &App) -> impl Iterator<Item = (SteamID, &Play
 #[must_use]
 pub fn view(state: &App) -> IcedContainer<'_> {
     let mut records: Vec<(SteamID, &PlayerRecord)> = get_filtered_records(state).collect();
-    records.sort_by_key(|(_, r)| r.modified());
+    records.sort_by_key(|(_, r)| r.created());
 
     // Pages
     let num_pages = records.len() / state.records_per_page + 1;

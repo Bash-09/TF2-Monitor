@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
     theme,
@@ -7,6 +9,8 @@ use iced::{
 
 use crate::{App, IcedContainer, Message};
 
+use self::styles::picklist::VerdictPickList;
+
 pub mod chat;
 pub mod history;
 pub mod killfeed;
@@ -14,6 +18,7 @@ pub mod player;
 pub mod records;
 pub mod server;
 pub mod settings;
+pub mod styles;
 
 #[derive(Debug, Clone)]
 pub enum View {
@@ -72,11 +77,17 @@ pub fn copy_button<'a>(to_copy: String) -> Button<'a, Message> {
 
 #[must_use]
 pub fn verdict_picker<'a>(verdict: Verdict, steamid: SteamID) -> PickList<'a, Verdict, Message> {
+    let style = iced::theme::PickList::Custom(
+        Rc::new(VerdictPickList(verdict)),
+        Rc::new(VerdictPickList(verdict)),
+    );
+
     PickList::new(VERDICT_OPTIONS, Some(verdict), move |v| {
         crate::Message::ChangeVerdict(steamid, v)
     })
     .width(100)
     .text_size(FONT_SIZE)
+    .style(style)
 }
 
 #[must_use]
