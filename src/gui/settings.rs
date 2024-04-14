@@ -59,7 +59,8 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                             steam_api_key: None,
                             masterbase_key: None,
                             masterbase_host: None,
-                            rcon_port: None
+                            rcon_port: None,
+                            dumb_autokick: None,
                         }),
                         external: None
                     }))
@@ -82,6 +83,7 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                             masterbase_key: None,
                             masterbase_host: None,
                             rcon_port: s.parse::<u16>().ok(),
+                            dumb_autokick: None,
                         }),
                         external: None
                     }))
@@ -107,7 +109,8 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                             steam_api_key: Some(s),
                             masterbase_key: None,
                             masterbase_host: None,
-                            rcon_port: None
+                            rcon_port: None,
+                            dumb_autokick: None,
                         }),
                         external: None
                     }))
@@ -131,7 +134,8 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                             steam_api_key: None,
                             masterbase_key: None,
                             masterbase_host: None,
-                            rcon_port: None
+                            rcon_port: None,
+                            dumb_autokick: None,
                         }),
                         external: None
                     }))
@@ -154,7 +158,8 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                             steam_api_key: None,
                             masterbase_key: Some(s),
                             masterbase_host: None,
-                            rcon_port: None
+                            rcon_port: None,
+                            dumb_autokick: None,
                         }),
                         external: None
                     }))
@@ -178,7 +183,8 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                             steam_api_key: None,
                             masterbase_key: None,
                             masterbase_host: Some(s),
-                            rcon_port: None
+                            rcon_port: None,
+                            dumb_autokick: None,
                         }),
                         external: None
                     }))
