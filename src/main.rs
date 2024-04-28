@@ -398,6 +398,7 @@ impl Drop for App {
     fn drop(&mut self) {
         self.save_settings();
         self.mac.players.records.save_ok();
+        self.mac.players.save_steam_info_ok();
     }
 }
 

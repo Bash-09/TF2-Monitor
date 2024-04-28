@@ -609,6 +609,7 @@ dependencies = [
  "keyvalues-serde 0.1.0",
  "notify",
  "open",
+ "pot",
  "rcon",
  "regex",
  "reqwest",
@@ -3201,6 +3202,17 @@ dependencies = [
  "rustix",
  "tracing",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "pot"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df842bdb3b0553a411589e64aaa1a7d0c0259f72fabcedfaa841683ae3019d80"
+dependencies = [
+ "byteorder",
+ "half",
+ "serde",
 ]
 
 [[package]]
