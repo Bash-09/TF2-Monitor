@@ -1,4 +1,8 @@
-use std::{any::TypeId, collections::HashMap, time::Duration};
+use std::{
+    any::TypeId,
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use bytes::Bytes;
 use clap::Parser;
@@ -110,6 +114,7 @@ pub struct App {
     record_search: String,
 
     pfp_cache: HashMap<String, iced::widget::image::Handle>,
+    pfp_in_progess: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -165,6 +170,7 @@ impl Application for App {
                 record_search: String::new(),
 
                 pfp_cache: HashMap::new(),
+                pfp_in_progess: HashSet::new(),
             },
             iced::Command::none(),
         )
@@ -245,10 +251,14 @@ impl Application for App {
             Message::SelectPlayer(steamid) => {
                 self.selected_player = Some(steamid);
 
-                // Request steam lookup of player if we don't have it currently
-                if !self.mac.players.steam_info.contains_key(&steamid) {
-                    let mut commands = Vec::new();
+                let mut commands = Vec::new();
 
+                // Fetch their profile if we don't have it currently but have the steam info
+                if let Some(si) = self.mac.players.steam_info.get(&steamid) {
+                    // Request pfps
+                    commands.push(self.request_pfp_lookup(si.pfp_hash.clone(), si.pfp_url.clone()));
+                } else {
+                    // Request steam lookup of player if we don't have it currently,
                     for a in self.event_loop.handle_message(
                         MACMessage::NewPlayers(NewPlayers(vec![steamid])),
                         &mut self.mac,
@@ -263,9 +273,9 @@ impl Application for App {
                             }
                         }
                     }
-
-                    return iced::Command::batch(commands);
                 }
+
+                return iced::Command::batch(commands);
             }
             Message::UnselectPlayer => self.selected_player = None,
             Message::PfpLookupResponse(pfp_hash, response) => {
@@ -346,16 +356,6 @@ impl App {
 
         let mut messages = vec![message];
         while let Some(m) = messages.pop() {
-            // Request pfps
-            if let MACMessage::ProfileLookupResult(ProfileLookupResult(Ok(new_info))) = &m {
-                for (_, result) in new_info {
-                    if let Ok(si) = result {
-                        commands
-                            .push(self.request_pfp_lookup(si.pfp_hash.clone(), si.pfp_url.clone()));
-                    }
-                }
-            }
-
             for a in self.event_loop.handle_message(m, &mut self.mac) {
                 match a {
                     event_loop::Action::Message(m) => messages.push(m),
@@ -374,14 +374,16 @@ impl App {
 
     fn insert_new_pfp(&mut self, pfp_hash: String, bytes: Bytes) {
         let handle = iced::widget::image::Handle::from_memory(bytes);
+        self.pfp_in_progess.remove(&pfp_hash);
         self.pfp_cache.insert(pfp_hash, handle);
     }
 
-    fn request_pfp_lookup(&self, pfp_hash: String, pfp_url: String) -> iced::Command<Message> {
-        if self.pfp_cache.contains_key(&pfp_hash) {
+    fn request_pfp_lookup(&mut self, pfp_hash: String, pfp_url: String) -> iced::Command<Message> {
+        if self.pfp_cache.contains_key(&pfp_hash) || self.pfp_in_progess.contains(&pfp_hash) {
             return iced::Command::none();
         }
 
+        self.pfp_in_progess.insert(pfp_hash.clone());
         iced::Command::perform(
             async move {
                 match reqwest::get(&pfp_url).await {
@@ -398,6 +400,7 @@ impl Drop for App {
     fn drop(&mut self) {
         self.save_settings();
         self.mac.players.records.save_ok();
+        self.mac.players.save_steam_info_ok();
     }
 }
 
