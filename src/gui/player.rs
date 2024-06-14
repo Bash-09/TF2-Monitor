@@ -124,18 +124,13 @@ pub fn view<'a, S: BuildHasher>(
 
 #[must_use]
 #[allow(clippy::module_name_repetitions)]
-pub fn row<'a, S: BuildHasher>(
-    state: &'a App,
-    game_info: &'a GameInfo,
-    player: SteamID,
-    pfp_cache: &'a HashMap<String, (Handle, Handle), S>,
-) -> IcedContainer<'a> {
+pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> IcedContainer<'a> {
     // pfp + name
     let mut name = widget::row![];
 
     // pfp here
     if let Some(steam_info) = &state.mac.players.steam_info.get(&player) {
-        if let Some((_, pfp_handle)) = pfp_cache.get(&steam_info.pfp_hash) {
+        if let Some((_, pfp_handle)) = state.pfp_cache.get(&steam_info.pfp_hash) {
             name = name.push(
                 Image::new(pfp_handle.clone())
                     .width(PFP_SMALL_SIZE)

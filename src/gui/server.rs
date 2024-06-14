@@ -35,7 +35,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                     .style(Color::new(0.72, 0.22, 0.23, 1.0)),
                 Space::with_height(10)
             ],
-            |col, &(s, gi)| col.push(player::row(state, gi, s, &state.pfp_cache)),
+            |col, &(s, gi)| col.push(player::row(state, gi, s)),
         )
         .width(Length::Fill)
         .padding(10)
@@ -56,7 +56,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                     .style(Color::new(0.34, 0.52, 0.63, 1.0)),
                 Space::with_height(10)
             ],
-            |col, &(s, gi)| col.push(player::row(state, gi, s, &state.pfp_cache)),
+            |col, &(s, gi)| col.push(player::row(state, gi, s)),
         )
         .width(Length::Fill)
         .padding(10)
@@ -84,7 +84,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                         .size(20),
                         Space::with_height(10)
                     ],
-                    |col, &(s, gi)| col.push(player::row(state, gi, s, &state.pfp_cache)),
+                    |col, &(s, gi)| col.push(player::row(state, gi, s)),
                 )
                 .width(Length::Fill)
                 .padding(10)
