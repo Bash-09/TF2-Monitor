@@ -1,6 +1,7 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
+    io::Cursor,
     time::Duration,
 };
 
@@ -10,6 +11,7 @@ use client_backend::{
     args::Args,
     console::ConsoleLog,
     demo::DemoWatcher,
+    demo::PrintVotes,
     event_loop::{self, define_events, EventLoop, MessageSource},
     player::Players,
     player_records::{PlayerRecords, Verdict},
@@ -18,13 +20,14 @@ use client_backend::{
     state::MACState,
     steamid_ng::SteamID,
 };
-use gui::{records::get_filtered_records, View};
+use gui::{records::get_filtered_records, View, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
     widget::Container,
     Application,
 };
+use image::{io::Reader, EncodableLayout};
 use serde_json::Map;
 use settings::{AppSettings, SETTINGS_IDENTIFIER};
 
@@ -81,6 +84,7 @@ define_events!(
 
         DemoManager,
         DumbAutoKick,
+        PrintVotes,
     },
 );
 
@@ -113,7 +117,8 @@ pub struct App {
     record_verdict_whitelist: Vec<Verdict>,
     record_search: String,
 
-    pfp_cache: HashMap<String, iced::widget::image::Handle>,
+    // (High res, Low res)
+    pfp_cache: HashMap<String, (iced::widget::image::Handle, iced::widget::image::Handle)>,
     pfp_in_progess: HashSet<String>,
 }
 
@@ -254,9 +259,9 @@ impl Application for App {
                 let mut commands = Vec::new();
 
                 // Fetch their profile if we don't have it currently but have the steam info
-                if let Some(si) = self.mac.players.steam_info.get(&steamid) {
+                if self.mac.players.steam_info.get(&steamid).is_some() {
                     // Request pfps
-                    commands.push(self.request_pfp_lookup(si.pfp_hash.clone(), si.pfp_url.clone()));
+                    commands.push(self.request_pfp_lookup_for_existing_player(steamid));
                 } else {
                     // Request steam lookup of player if we don't have it currently,
                     for a in self.event_loop.handle_message(
@@ -356,6 +361,24 @@ impl App {
 
         let mut messages = vec![message];
         while let Some(m) = messages.pop() {
+            // Get profile pictures
+            match &m {
+                MACMessage::ProfileLookupResult(ProfileLookupResult(Ok(profiles))) => {
+                    for (_, r) in profiles {
+                        if let Ok(si) = r {
+                            commands.push(self.request_pfp_lookup(&si.pfp_hash, &si.pfp_url));
+                        }
+                    }
+                }
+                MACMessage::NewPlayers(NewPlayers(players)) => {
+                    for s in players {
+                        commands.push(self.request_pfp_lookup_for_existing_player(*s));
+                    }
+                }
+                _ => {}
+            }
+
+            // Handle MAC messages in MAC event loop
             for a in self.event_loop.handle_message(m, &mut self.mac) {
                 match a {
                     event_loop::Action::Message(m) => messages.push(m),
@@ -373,17 +396,70 @@ impl App {
     }
 
     fn insert_new_pfp(&mut self, pfp_hash: String, bytes: Bytes) {
+        let smol_image = Reader::new(Cursor::new(&bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.decode().ok())
+            .map_or_else(
+                || todo!("Default image needed"),
+                |di| {
+                    di.resize(
+                        u32::from(PFP_SMALL_SIZE),
+                        u32::from(PFP_SMALL_SIZE),
+                        image::imageops::FilterType::Triangle,
+                    )
+                },
+            )
+            .into_rgba8();
+
         let handle = iced::widget::image::Handle::from_memory(bytes);
+        let smol_handle = iced::widget::image::Handle::from_pixels(
+            u32::from(PFP_SMALL_SIZE),
+            u32::from(PFP_SMALL_SIZE),
+            Bytes::copy_from_slice(smol_image.as_bytes()),
+        );
+
         self.pfp_in_progess.remove(&pfp_hash);
-        self.pfp_cache.insert(pfp_hash, handle);
+        self.pfp_cache.insert(pfp_hash, (handle, smol_handle));
     }
 
-    fn request_pfp_lookup(&mut self, pfp_hash: String, pfp_url: String) -> iced::Command<Message> {
-        if self.pfp_cache.contains_key(&pfp_hash) || self.pfp_in_progess.contains(&pfp_hash) {
+    fn request_pfp_lookup(&mut self, pfp_hash: &str, pfp_url: &str) -> iced::Command<Message> {
+        if self.pfp_cache.contains_key(pfp_hash) || self.pfp_in_progess.contains(pfp_hash) {
             return iced::Command::none();
         }
 
-        self.pfp_in_progess.insert(pfp_hash.clone());
+        self.pfp_in_progess.insert(pfp_hash.to_string());
+        let pfp_hash = pfp_hash.to_string();
+        let pfp_url = pfp_url.to_string();
+        iced::Command::perform(
+            async move {
+                match reqwest::get(&pfp_url).await {
+                    Ok(resp) => (pfp_hash, resp.bytes().await.map_err(|_| ())),
+                    Err(_) => (pfp_hash, Err(())),
+                }
+            },
+            |(pfp_hash, resp)| Message::PfpLookupResponse(pfp_hash, resp),
+        )
+    }
+
+    fn request_pfp_lookup_for_existing_player(
+        &mut self,
+        player: SteamID,
+    ) -> iced::Command<Message> {
+        let Some(si) = self.mac.players.steam_info.get(&player) else {
+            return iced::Command::none();
+        };
+
+        let pfp_hash = &si.pfp_hash;
+        let pfp_url = &si.pfp_url;
+
+        if self.pfp_cache.contains_key(pfp_hash) || self.pfp_in_progess.contains(pfp_hash) {
+            return iced::Command::none();
+        }
+
+        self.pfp_in_progess.insert(pfp_hash.to_string());
+        let pfp_hash = pfp_hash.to_string();
+        let pfp_url = pfp_url.to_string();
         iced::Command::perform(
             async move {
                 match reqwest::get(&pfp_url).await {
@@ -439,6 +515,7 @@ fn main() {
         .add_handler(ExtractNewPlayers)
         .add_handler(LookupProfiles::new())
         .add_handler(DemoManager::new())
+        .add_handler(PrintVotes::new())
         .add_handler(LookupFriends::new());
 
     let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));

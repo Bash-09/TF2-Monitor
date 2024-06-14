@@ -15,14 +15,14 @@ use crate::{App, IcedContainer, Message, ALIAS_KEY, NOTES_KEY};
 pub fn view<'a, S: BuildHasher>(
     state: &'a App,
     player: SteamID,
-    pfp_cache: &'a HashMap<String, Handle, S>,
+    pfp_cache: &'a HashMap<String, (Handle, Handle), S>,
 ) -> IcedContainer<'a> {
     let mut contents = column![].spacing(7);
 
     // pfp and close buttons
     let mut pfp_close = widget::row![];
 
-    if let Some(pfp_handle) = state
+    if let Some((pfp_handle, _)) = state
         .mac
         .players
         .steam_info
@@ -51,26 +51,13 @@ pub fn view<'a, S: BuildHasher>(
         .align_items(iced::Alignment::Center)
         .spacing(10);
 
-    #[allow(clippy::option_if_let_else, clippy::manual_map)]
-    let name_text = state.mac.players.get_name(player);
-
-    if let Some(name_text) = name_text {
-        name = name.push(widget::text(name_text.to_string()));
-    }
+    let name_text = state.mac.players.get_name(player).unwrap_or("    ");
 
     let maybe_record = state.mac.players.records.get(&player);
-    if let Some(record) = maybe_record {
-        // Alias
-        if let Some(alias) = record.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()) {
-            name = name.push(Tooltip::new(
-                "☆",
-                alias,
-                iced::widget::tooltip::Position::Bottom,
-            ));
-        }
 
-        // Previous names
-        if !record.previous_names().is_empty() {
+    // Name and previous names
+    match maybe_record {
+        Some(record) if !record.previous_names().is_empty() => {
             let mut tooltip = String::new();
             record
                 .previous_names()
@@ -78,10 +65,24 @@ pub fn view<'a, S: BuildHasher>(
                 .for_each(|n| tooltip.push_str(&format!("{n}\n")));
 
             name = name.push(
-                Tooltip::new("P", tooltip, iced::widget::tooltip::Position::Bottom)
+                Tooltip::new(name_text, tooltip, iced::widget::tooltip::Position::Bottom)
                     .style(theme::Container::Box),
             );
         }
+        _ => {
+            name = name.push(widget::text(name_text));
+        }
+    }
+
+    // Alias
+    if let Some(alias) =
+        maybe_record.and_then(|r| r.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()))
+    {
+        name = name.push(Tooltip::new(
+            "☆",
+            alias,
+            iced::widget::tooltip::Position::Bottom,
+        ));
     }
 
     contents = contents.push(name);
@@ -127,14 +128,14 @@ pub fn row<'a, S: BuildHasher>(
     state: &'a App,
     game_info: &'a GameInfo,
     player: SteamID,
-    pfp_cache: &'a HashMap<String, Handle, S>,
+    pfp_cache: &'a HashMap<String, (Handle, Handle), S>,
 ) -> IcedContainer<'a> {
-    // name
+    // pfp + name
     let mut name = widget::row![];
 
     // pfp here
     if let Some(steam_info) = &state.mac.players.steam_info.get(&player) {
-        if let Some(pfp_handle) = pfp_cache.get(&steam_info.pfp_hash) {
+        if let Some((_, pfp_handle)) = pfp_cache.get(&steam_info.pfp_hash) {
             name = name.push(
                 Image::new(pfp_handle.clone())
                     .width(PFP_SMALL_SIZE)
@@ -211,7 +212,17 @@ pub fn row<'a, S: BuildHasher>(
     }
 
     // Time
-    contents = contents.push(widget::text(game_info.time).size(FONT_SIZE));
+    let hours = game_info.time / (60 * 60);
+    let minutes = game_info.time % (60 * 60) / 60;
+    let seconds = game_info.time % 60;
+
+    let time = if hours == 0 {
+        format!("{minutes:02}:{seconds:02}")
+    } else {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    };
+
+    contents = contents.push(widget::text(time).size(FONT_SIZE));
 
     Container::new(contents).width(Length::Fill).center_y()
 }
