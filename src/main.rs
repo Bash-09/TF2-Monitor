@@ -20,11 +20,15 @@ use client_backend::{
     state::MACState,
     steamid_ng::SteamID,
 };
-use gui::{records::get_filtered_records, View, PFP_SMALL_SIZE};
+use gui::{chat, records::get_filtered_records, View, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
-    widget::Container,
+    widget::{
+        self,
+        scrollable::{snap_to, RelativeOffset},
+        Container,
+    },
     Application,
 };
 use image::{io::Reader, EncodableLayout};
@@ -111,6 +115,8 @@ pub struct App {
     view: View,
     selected_player: Option<SteamID>,
 
+    snap_chat_to_bottom: bool,
+
     // records
     records_per_page: usize,
     record_page: usize,
@@ -140,6 +146,8 @@ pub enum Message {
     ToggleVerdictFilter(Verdict),
     SetRecordSearch(String),
 
+    ScrolledChat(RelativeOffset),
+
     SetKickBots(bool),
 }
 
@@ -162,6 +170,8 @@ impl Application for App {
 
                 view: View::Server,
                 selected_player: None,
+
+                snap_chat_to_bottom: true,
 
                 records_per_page: 50,
                 record_page: 0,
@@ -259,7 +269,7 @@ impl Application for App {
                 let mut commands = Vec::new();
 
                 // Fetch their profile if we don't have it currently but have the steam info
-                if self.mac.players.steam_info.get(&steamid).is_some() {
+                if self.mac.players.steam_info.contains_key(&steamid) {
                     // Request pfps
                     commands.push(self.request_pfp_lookup_for_existing_player(steamid));
                 } else {
@@ -314,6 +324,9 @@ impl Application for App {
                 self.record_page = self.record_page.min(max_page);
             }
             Message::SetKickBots(kick) => self.mac.settings.set_autokick_bots(kick),
+            Message::ScrolledChat(offset) => {
+                self.snap_chat_to_bottom = (offset.y - 1.0).abs() <= f32::EPSILON;
+            }
         };
 
         iced::Command::none()
@@ -374,6 +387,12 @@ impl App {
                     for s in players {
                         commands.push(self.request_pfp_lookup_for_existing_player(*s));
                     }
+                }
+                MACMessage::ConsoleOutput(ConsoleOutput::Chat(_)) if self.snap_chat_to_bottom => {
+                    commands.push(snap_to(
+                        widget::scrollable::Id::new(chat::SCROLLABLE_ID),
+                        RelativeOffset { x: 0.0, y: 1.0 },
+                    ));
                 }
                 _ => {}
             }
@@ -491,7 +510,7 @@ fn main() {
     settings.save_ok();
 
     // Playerlist
-    let playerlist = PlayerRecords::load_or_create(&args);
+    let mut playerlist = PlayerRecords::load_or_create(&args);
     playerlist.save_ok();
 
     let players = Players::new(playerlist, settings.steam_user());
