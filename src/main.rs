@@ -20,7 +20,7 @@ use client_backend::{
     state::MACState,
     steamid_ng::SteamID,
 };
-use gui::{chat, records::get_filtered_records, View, PFP_SMALL_SIZE};
+use gui::{chat, killfeed, records::get_filtered_records, View, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -116,6 +116,7 @@ pub struct App {
     selected_player: Option<SteamID>,
 
     snap_chat_to_bottom: bool,
+    snap_kills_to_bottom: bool,
 
     // records
     records_per_page: usize,
@@ -147,6 +148,7 @@ pub enum Message {
     SetRecordSearch(String),
 
     ScrolledChat(RelativeOffset),
+    ScrolledKills(RelativeOffset),
 
     SetKickBots(bool),
 }
@@ -172,6 +174,7 @@ impl Application for App {
                 selected_player: None,
 
                 snap_chat_to_bottom: true,
+                snap_kills_to_bottom: true,
 
                 records_per_page: 50,
                 record_page: 0,
@@ -327,6 +330,9 @@ impl Application for App {
             Message::ScrolledChat(offset) => {
                 self.snap_chat_to_bottom = (offset.y - 1.0).abs() <= f32::EPSILON;
             }
+            Message::ScrolledKills(offset) => {
+                self.snap_kills_to_bottom = (offset.y - 1.0).abs() <= f32::EPSILON;
+            }
         };
 
         iced::Command::none()
@@ -391,6 +397,12 @@ impl App {
                 MACMessage::ConsoleOutput(ConsoleOutput::Chat(_)) if self.snap_chat_to_bottom => {
                     commands.push(snap_to(
                         widget::scrollable::Id::new(chat::SCROLLABLE_ID),
+                        RelativeOffset { x: 0.0, y: 1.0 },
+                    ));
+                }
+                MACMessage::ConsoleOutput(ConsoleOutput::Kill(_)) if self.snap_kills_to_bottom => {
+                    commands.push(snap_to(
+                        widget::scrollable::Id::new(killfeed::SCROLLABLE_ID),
                         RelativeOffset { x: 0.0, y: 1.0 },
                     ));
                 }
