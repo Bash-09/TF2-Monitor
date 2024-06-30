@@ -1,5 +1,4 @@
 use iced::{
-    alignment::Horizontal,
     widget::{self, scrollable::Id, Container, Scrollable},
     Alignment, Color, Length,
 };
@@ -40,9 +39,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                 }
 
                 row = row.push(
-                    Container::new(weapon)
-                        .width(Length::FillPortion(1))
-                        .center_x(),
+                    Container::new(weapon).width(Length::FillPortion(1)), // .center_x(),
                 );
 
                 // Victim name
@@ -54,9 +51,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                 }
 
                 let row = row.push(
-                    Container::new(victim_name)
-                        .width(Length::FillPortion(1))
-                        .align_x(Horizontal::Right),
+                    Container::new(victim_name).width(Length::FillPortion(1)), // .align_x(Horizontal::Right),
                 );
 
                 row.push(widget::horizontal_space(5.0))
