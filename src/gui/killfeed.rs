@@ -1,4 +1,5 @@
 use iced::{
+    alignment::Horizontal,
     widget::{self, scrollable::Id, Container, Scrollable},
     Alignment, Color, Length,
 };
@@ -7,7 +8,7 @@ use crate::{App, IcedContainer, Message};
 
 use super::FONT_SIZE;
 
-pub const SCROLLABLE_ID: &str = "Chat";
+pub const SCROLLABLE_ID: &str = "Kills";
 
 #[must_use]
 pub fn view(state: &App) -> IcedContainer<'_> {
@@ -23,36 +24,40 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                 let mut row = widget::Row::new().align_items(Alignment::Center).spacing(5);
 
                 // Killer name
-                let killer_name =
+                let mut killer_name =
                     widget::button(widget::text(&kill.killer_name).size(FONT_SIZE)).padding(2);
 
                 if let Some(steamid) = kill.killer_steamid {
-                    row = row.push(killer_name.on_press(Message::SelectPlayer(steamid)));
-                } else {
-                    row = row.push(killer_name);
+                    killer_name = killer_name.on_press(Message::SelectPlayer(steamid));
                 }
 
-                row = row.push(widget::horizontal_space(Length::Fill));
+                row = row.push(Container::new(killer_name).width(Length::FillPortion(1)));
 
                 // Weapon
-                let weapon = widget::text(&kill.weapon).size(FONT_SIZE);
+                let mut weapon = widget::text(&kill.weapon).size(FONT_SIZE);
                 if kill.crit {
-                    row = row.push(weapon.style(Color::from_rgb(1.0, 0.0, 0.0)));
-                } else {
-                    row = row.push(weapon);
+                    weapon = weapon.style(Color::from_rgb(1.0, 0.0, 0.0));
                 }
 
-                row = row.push(widget::horizontal_space(Length::Fill));
+                row = row.push(
+                    Container::new(weapon)
+                        .width(Length::FillPortion(1))
+                        .center_x(),
+                );
 
                 // Victim name
-                let victim_name =
+                let mut victim_name =
                     widget::button(widget::text(&kill.victim_name).size(FONT_SIZE)).padding(2);
 
                 if let Some(steamid) = kill.victim_steamid {
-                    row = row.push(victim_name.on_press(Message::SelectPlayer(steamid)));
-                } else {
-                    row = row.push(victim_name);
+                    victim_name = victim_name.on_press(Message::SelectPlayer(steamid));
                 }
+
+                let row = row.push(
+                    Container::new(victim_name)
+                        .width(Length::FillPortion(1))
+                        .align_x(Horizontal::Right),
+                );
 
                 row.push(widget::horizontal_space(5.0))
             })

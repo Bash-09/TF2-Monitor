@@ -92,41 +92,43 @@ pub fn verdict_picker<'a>(verdict: Verdict, steamid: SteamID) -> PickList<'a, Ve
 
 #[must_use]
 pub fn main_window(state: &App) -> IcedContainer<'_> {
+    const SPLIT: [u16; 2] = [7, 3];
     // Right panel is either chat + killfeed or the currently selected player
-    let right_panel = state
-        .selected_player
-        .map_or_else(
-            || {
-                Container::new(column![
-                    chat::view(state)
-                        .width(Length::Fill)
-                        .height(Length::FillPortion(1)),
-                    Rule::horizontal(1),
-                    killfeed::view(state)
-                        .width(Length::Fill)
-                        .height(Length::FillPortion(1))
-                ])
-            },
-            |p| player::view(state, p, &state.pfp_cache),
-        )
-        .width(Length::FillPortion(2))
-        .height(Length::Fill);
+    let right_panel = match (state.selected_player, state.settings.show_chat_and_killfeed) {
+        (Some(steamid), _) => Some(player::view(state, steamid)),
+        (None, true) => Some(Container::new(column![
+            chat::view(state)
+                .width(Length::Fill)
+                .height(Length::FillPortion(1)),
+            Rule::horizontal(1),
+            killfeed::view(state)
+                .width(Length::Fill)
+                .height(Length::FillPortion(1))
+        ])),
+        (None, false) => None,
+    };
 
     // Rest of the view
-    let content = row![
+    let mut content = row![column![
         view_select(state),
-        Rule::vertical(1),
+        Rule::horizontal(1),
         match state.view {
             View::Server => server::view(state),
             View::History => history::view(state),
             View::Settings => settings::view(state),
             View::Records => records::view(state),
         }
-        .width(Length::FillPortion(5))
-        .height(Length::Fill),
-        Rule::vertical(1),
-        right_panel,
-    ];
+    ]
+    .width(Length::FillPortion(SPLIT[0]))
+    .height(Length::Fill),];
+
+    if let Some(right_panel) = right_panel {
+        content = content.push(Rule::vertical(1)).push(
+            right_panel
+                .width(Length::FillPortion(SPLIT[1]))
+                .height(Length::Fill),
+        );
+    }
 
     Container::new(content)
         .width(Length::Fill)
@@ -137,13 +139,15 @@ pub fn main_window(state: &App) -> IcedContainer<'_> {
 
 #[must_use]
 pub fn view_select(_: &App) -> IcedContainer<'_> {
-    let content = column![
+    let content = row![
         Button::new("Server").on_press(Message::SetView(View::Server)),
         Button::new("History").on_press(Message::SetView(View::History)),
         Button::new("Records").on_press(Message::SetView(View::Records)),
         Button::new("Settings").on_press(Message::SetView(View::Settings)),
+        widget::horizontal_space(Length::Fill),
+        Button::new("Chat and Killfeed").on_press(Message::ToggleChatKillfeed),
     ]
     .spacing(10);
 
-    Container::new(content).height(Length::Fill).padding(10)
+    Container::new(content).width(Length::Fill).padding(10)
 }

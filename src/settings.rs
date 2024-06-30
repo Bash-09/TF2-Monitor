@@ -8,4 +8,5 @@ pub const SETTINGS_IDENTIFIER: &str = "MACClientSettings";
 pub struct AppSettings {
     pub window_pos: Option<(i32, i32)>,
     pub window_size: Option<(u32, u32)>,
+    pub show_chat_and_killfeed: bool,
 }

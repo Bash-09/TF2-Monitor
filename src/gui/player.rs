@@ -1,9 +1,7 @@
-use std::{collections::HashMap, hash::BuildHasher};
-
 use client_backend::{player::GameInfo, player_records::PlayerRecord, steamid_ng::SteamID};
 use iced::{
     theme,
-    widget::{self, column, image::Handle, Button, Container, Image, Space, TextInput, Tooltip},
+    widget::{self, column, Button, Container, Image, Space, TextInput, Tooltip},
     Length,
 };
 
@@ -12,11 +10,7 @@ use super::{
 };
 use crate::{App, IcedContainer, Message, ALIAS_KEY, NOTES_KEY};
 
-pub fn view<'a, S: BuildHasher>(
-    state: &'a App,
-    player: SteamID,
-    pfp_cache: &'a HashMap<String, (Handle, Handle), S>,
-) -> IcedContainer<'a> {
+pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
     let mut contents = column![].spacing(7);
 
     // pfp and close buttons
@@ -28,7 +22,7 @@ pub fn view<'a, S: BuildHasher>(
         .steam_info
         .get(&player)
         .as_ref()
-        .and_then(|s| pfp_cache.get(&s.pfp_hash))
+        .and_then(|s| state.pfp_cache.get(&s.pfp_hash))
     {
         pfp_close = pfp_close.push(
             Image::new((*pfp_handle).clone())

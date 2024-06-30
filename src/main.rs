@@ -10,9 +10,9 @@ use clap::Parser;
 use client_backend::{
     args::Args,
     console::ConsoleLog,
-    demo::DemoWatcher,
-    demo::PrintVotes,
+    demo::{DemoWatcher, PrintVotes},
     event_loop::{self, define_events, EventLoop, MessageSource},
+    masterbase,
     player::Players,
     player_records::{PlayerRecords, Verdict},
     server::Server,
@@ -31,7 +31,8 @@ use iced::{
     },
     Application,
 };
-use image::{io::Reader, EncodableLayout};
+use image::{io::Reader, EncodableLayout, ImageBuffer};
+use reqwest::StatusCode;
 use serde_json::Map;
 use settings::{AppSettings, SETTINGS_IDENTIFIER};
 
@@ -131,20 +132,27 @@ pub struct App {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    None,
+
     EventOccurred(Event),
     PfpLookupResponse(String, Result<Bytes, ()>),
 
     SetView(View),
     SelectPlayer(SteamID),
     UnselectPlayer,
+    /// Toggle whether the chat and killfeed section on the right should be shown
+    ToggleChatKillfeed,
+
     CopyToClipboard(String),
     ChangeVerdict(SteamID, Verdict),
     ChangeNotes(SteamID, String),
     Open(String),
     MAC(MACMessage),
 
+    /// Which page of records to display
     SetRecordPage(usize),
     ToggleVerdictFilter(Verdict),
+    /// Records search bar
     SetRecordSearch(String),
 
     ScrolledChat(RelativeOffset),
@@ -163,12 +171,47 @@ impl Application for App {
         AppSettings,
     );
 
-    fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+    fn new((mac, event_loop, settings): Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        let command = if mac.settings.upload_demos {
+            let host = mac.settings.masterbase_host().to_string();
+            let key = mac.settings.masterbase_key().to_string();
+            let http = mac.settings.use_masterbase_http();
+            iced::Command::perform(
+                async move {
+                    match masterbase::force_close_session(&host, &key, http).await {
+                        // Successfully closed existing session
+                        Ok(r) if r.status().is_success() => tracing::warn!(
+                            "User was previously in a Masterbase session that has now been closed."
+                        ),
+                        // Server error
+                        Ok(r) if r.status().is_server_error() => tracing::error!(
+                            "Server error when trying to close previous Masterbase sessions: Status code {}",
+                            r.status()
+                        ),
+                        // Not authorized, invalid key
+                        Ok(r) if r.status() == StatusCode::UNAUTHORIZED => {
+                            tracing::warn!("Your Masterbase key is not valid. Please provision a new one at https://megaanticheat.com/provision");
+                        }
+                        // Forbidden, no session was open
+                        Ok(r) if r.status() == StatusCode::FORBIDDEN => {
+                            tracing::info!("Successfully authenticated with the Masterbase.");
+                        }
+                        // Remaining responses will be client failures
+                        Ok(r) => tracing::info!("Client error when trying to contact masterbase: Status code {}", r.status()),
+                        Err(e) => tracing::error!("Couldn't reach Masterbase: {e}"),
+                    }
+                },
+                |()| Message::None,
+            )
+        } else {
+            iced::Command::none()
+        };
+
         (
             Self {
-                mac: flags.0,
-                event_loop: flags.1,
-                settings: flags.2,
+                mac,
+                event_loop,
+                settings,
 
                 view: View::Server,
                 selected_player: None,
@@ -190,7 +233,7 @@ impl Application for App {
                 pfp_cache: HashMap::new(),
                 pfp_in_progess: HashSet::new(),
             },
-            iced::Command::none(),
+            command,
         )
     }
 
@@ -253,6 +296,7 @@ impl Application for App {
 
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
         match message {
+            Message::None => {}
             Message::EventOccurred(Event::Window(iced::window::Event::Moved { x, y })) => {
                 self.settings.window_pos = Some((x, y));
             }
@@ -262,6 +306,7 @@ impl Application for App {
             })) => {
                 self.settings.window_size = Some((width, height));
             }
+            #[allow(clippy::match_same_arms)]
             Message::EventOccurred(_) => {}
             Message::SetView(v) => self.view = v,
             Message::ChangeVerdict(steamid, verdict) => self.update_verdict(steamid, verdict),
@@ -332,6 +377,14 @@ impl Application for App {
             }
             Message::ScrolledKills(offset) => {
                 self.snap_kills_to_bottom = (offset.y - 1.0).abs() <= f32::EPSILON;
+            }
+            Message::ToggleChatKillfeed => {
+                if self.selected_player.is_some() {
+                    self.selected_player = None;
+                    self.settings.show_chat_and_killfeed = true;
+                } else {
+                    self.settings.show_chat_and_killfeed = !self.settings.show_chat_and_killfeed;
+                }
             }
         };
 
@@ -432,7 +485,12 @@ impl App {
             .ok()
             .and_then(|r| r.decode().ok())
             .map_or_else(
-                || todo!("Default image needed"),
+                || {
+                    image::DynamicImage::ImageRgb8(ImageBuffer::new(
+                        u32::from(PFP_SMALL_SIZE),
+                        u32::from(PFP_SMALL_SIZE),
+                    ))
+                },
                 |di| {
                     di.resize(
                         u32::from(PFP_SMALL_SIZE),
@@ -550,6 +608,7 @@ fn main() {
         .add_handler(LookupFriends::new());
 
     let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));
+    iced_settings.window.min_size = Some((600, 400));
     if let Some(pos) = app_settings.window_pos {
         iced_settings.window.position = iced::window::Position::Specific(pos.0, pos.1);
     }
