@@ -25,6 +25,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         .iter()
         .filter(|&(_, gi)| gi.team == Team::Red)
         .copied()
+        .rev()
         .collect();
     let team_red = team_red_players
         .iter()
@@ -46,6 +47,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         .iter()
         .filter(|&(_, gi)| gi.team == Team::Blu)
         .copied()
+        .rev()
         .collect();
     let team_blu = team_blu_players
         .iter()
@@ -67,6 +69,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         .iter()
         .filter(|&(_, gi)| gi.team != Team::Red && gi.team != Team::Blu)
         .copied()
+        .rev()
         .collect();
     let team_other = if team_other_players.is_empty() {
         None

@@ -1,6 +1,8 @@
 use client_backend::player_records::Verdict;
 use iced::{widget::pick_list, Color};
 
+use super::colours;
+
 pub struct VerdictPickList(pub Verdict);
 
 impl iced::overlay::menu::StyleSheet for VerdictPickList {
@@ -29,10 +31,10 @@ impl pick_list::StyleSheet for VerdictPickList {
 
         let verdict_col = match self.0 {
             Verdict::Player => palette.background.weak.text,
-            Verdict::Bot => Color::from_rgb(1.0, 0.3, 0.3),
-            Verdict::Suspicious => Color::from_rgb(1.0, 0.6, 0.6),
-            Verdict::Cheater => Color::from_rgb(1.0, 0.75, 0.25),
-            Verdict::Trusted => Color::from_rgb(0.2, 1.0, 0.2),
+            Verdict::Bot => colours::red(),
+            Verdict::Suspicious => colours::pink(),
+            Verdict::Cheater => colours::orange(),
+            Verdict::Trusted => colours::green(),
         };
 
         pick_list::Appearance {

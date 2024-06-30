@@ -51,7 +51,7 @@ use client_backend::{
     new_players::{ExtractNewPlayers, NewPlayers},
     steam_api::{
         FriendLookupResult, LookupFriends, LookupProfiles, ProfileLookupBatchTick,
-        ProfileLookupResult,
+        ProfileLookupRequest, ProfileLookupResult,
     },
 };
 
@@ -67,6 +67,7 @@ define_events!(
 
         NewPlayers,
 
+        ProfileLookupRequest,
         ProfileLookupBatchTick,
         ProfileLookupResult,
         FriendLookupResult,
@@ -137,6 +138,7 @@ pub enum Message {
 
     EventOccurred(Event),
     PfpLookupResponse(String, Result<Bytes, ()>),
+    ProfileLookupRequest(SteamID),
 
     SetView(View),
     SelectPlayer(SteamID),
@@ -296,6 +298,7 @@ impl Application for App {
         ])
     }
 
+    #[allow(clippy::too_many_lines)]
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
         match message {
             Message::None => {}
@@ -321,31 +324,13 @@ impl Application for App {
             Message::SelectPlayer(steamid) => {
                 self.selected_player = Some(steamid);
 
-                let mut commands = Vec::new();
-
-                // Fetch their profile if we don't have it currently but have the steam info
+                // Fetch their pfp if we don't have it currently but have the steam info
                 if self.mac.players.steam_info.contains_key(&steamid) {
-                    // Request pfps
-                    commands.push(self.request_pfp_lookup_for_existing_player(steamid));
-                } else {
-                    // Request steam lookup of player if we don't have it currently,
-                    for a in self.event_loop.handle_message(
-                        MACMessage::NewPlayers(NewPlayers(vec![steamid])),
-                        &mut self.mac,
-                    ) {
-                        match a {
-                            event_loop::Action::Message(_) => {}
-                            event_loop::Action::Future(f) => {
-                                commands.push(iced::Command::perform(
-                                    f.map(|m| m.unwrap_or(MACMessage::None)),
-                                    Message::MAC,
-                                ));
-                            }
-                        }
-                    }
+                    return self.request_pfp_lookup_for_existing_player(steamid);
                 }
 
-                return iced::Command::batch(commands);
+                // Request steam lookup of player if we don't have it currently,
+                return self.request_profile_lookup(vec![steamid]);
             }
             Message::UnselectPlayer => self.selected_player = None,
             Message::PfpLookupResponse(pfp_hash, response) => {
@@ -395,6 +380,9 @@ impl Application for App {
                 } else {
                     self.settings.show_chat_and_killfeed = !self.settings.show_chat_and_killfeed;
                 }
+            }
+            Message::ProfileLookupRequest(s) => {
+                return self.request_profile_lookup(vec![s]);
             }
         };
 
@@ -572,6 +560,26 @@ impl App {
 
         self.pfp_in_progess.remove(&pfp_hash);
         self.pfp_cache.insert(pfp_hash, (full_handle, smol_handle));
+    }
+
+    fn request_profile_lookup(&mut self, accounts: Vec<SteamID>) -> iced::Command<Message> {
+        let mut commands = Vec::new();
+        for a in self.event_loop.handle_message(
+            MACMessage::ProfileLookupRequest(ProfileLookupRequest::Multiple(accounts)),
+            &mut self.mac,
+        ) {
+            match a {
+                event_loop::Action::Message(_) => {}
+                event_loop::Action::Future(f) => {
+                    commands.push(iced::Command::perform(
+                        f.map(|m| m.unwrap_or(MACMessage::None)),
+                        Message::MAC,
+                    ));
+                }
+            }
+        }
+
+        iced::Command::batch(commands)
     }
 
     fn request_pfp_lookup(&mut self, pfp_hash: &str, pfp_url: &str) -> iced::Command<Message> {

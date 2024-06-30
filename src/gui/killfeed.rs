@@ -1,11 +1,11 @@
 use iced::{
     widget::{self, scrollable::Id, Container, Scrollable},
-    Alignment, Color, Length,
+    Alignment, Length,
 };
 
 use crate::{App, IcedContainer, Message};
 
-use super::FONT_SIZE;
+use super::{styles::colours, FONT_SIZE};
 
 pub const SCROLLABLE_ID: &str = "Kills";
 
@@ -35,7 +35,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                 // Weapon
                 let mut weapon = widget::text(&kill.weapon).size(FONT_SIZE);
                 if kill.crit {
-                    weapon = weapon.style(Color::from_rgb(1.0, 0.0, 0.0));
+                    weapon = weapon.style(colours::red());
                 }
 
                 row = row.push(
