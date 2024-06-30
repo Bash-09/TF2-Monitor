@@ -16,7 +16,7 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
     // pfp and close buttons
     let mut pfp_close = widget::row![];
 
-    if let Some((pfp_handle, _)) = state
+    if let Some((pfp, _)) = state
         .mac
         .players
         .steam_info
@@ -25,7 +25,7 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
         .and_then(|s| state.pfp_cache.get(&s.pfp_hash))
     {
         pfp_close = pfp_close.push(
-            Image::new((*pfp_handle).clone())
+            Image::new(pfp.clone())
                 .width(PFP_FULL_SIZE)
                 .height(PFP_FULL_SIZE),
         );

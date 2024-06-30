@@ -20,7 +20,7 @@ use client_backend::{
     state::MACState,
     steamid_ng::SteamID,
 };
-use gui::{chat, killfeed, records::get_filtered_records, View, PFP_SMALL_SIZE};
+use gui::{chat, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -120,6 +120,7 @@ pub struct App {
     snap_kills_to_bottom: bool,
 
     // records
+    records_to_display: Vec<SteamID>,
     records_per_page: usize,
     record_page: usize,
     record_verdict_whitelist: Vec<Verdict>,
@@ -219,6 +220,7 @@ impl Application for App {
                 snap_chat_to_bottom: true,
                 snap_kills_to_bottom: true,
 
+                records_to_display: Vec::new(),
                 records_per_page: 50,
                 record_page: 0,
                 record_verdict_whitelist: vec![
@@ -308,7 +310,12 @@ impl Application for App {
             }
             #[allow(clippy::match_same_arms)]
             Message::EventOccurred(_) => {}
-            Message::SetView(v) => self.view = v,
+            Message::SetView(v) => {
+                self.view = v;
+                if matches!(self.view, View::Records) {
+                    self.update_displayed_records();
+                }
+            }
             Message::ChangeVerdict(steamid, verdict) => self.update_verdict(steamid, verdict),
             Message::ChangeNotes(steamid, notes) => self.update_notes(steamid, notes),
             Message::SelectPlayer(steamid) => {
@@ -343,7 +350,7 @@ impl Application for App {
             Message::UnselectPlayer => self.selected_player = None,
             Message::PfpLookupResponse(pfp_hash, response) => {
                 if let Ok(bytes) = response {
-                    self.insert_new_pfp(pfp_hash, bytes);
+                    self.insert_new_pfp(pfp_hash, &bytes);
                 }
             }
             Message::CopyToClipboard(contents) => return iced::clipboard::write(contents),
@@ -363,12 +370,15 @@ impl Application for App {
                     self.record_verdict_whitelist.push(v);
                 }
 
-                let max_page = get_filtered_records(self).count() / self.records_per_page;
+                self.update_displayed_records();
+
+                let max_page = self.records_to_display.len() / self.records_per_page;
                 self.record_page = self.record_page.min(max_page);
             }
             Message::SetRecordSearch(search) => {
                 self.record_search = search;
-                let max_page = get_filtered_records(self).count() / self.records_per_page;
+                self.update_displayed_records();
+                let max_page = self.records_to_display.len() / self.records_per_page;
                 self.record_page = self.record_page.min(max_page);
             }
             Message::SetKickBots(kick) => self.mac.settings.set_autokick_bots(kick),
@@ -428,6 +438,51 @@ impl App {
         self.mac.players.records.save_ok();
     }
 
+    fn update_displayed_records(&mut self) {
+        self.records_to_display = self
+            .mac
+            .players
+            .records
+            .iter()
+            .map(|(s, r)| (*s, r))
+            .filter(|(_, r)| self.record_verdict_whitelist.contains(&r.verdict()))
+            .filter(|(s, r)| {
+                // Search bar
+                if self.record_search.is_empty() {
+                    return true;
+                }
+
+                // Previous names
+                r.previous_names()
+                    .iter()
+                    .any(|n| n.contains(&self.record_search))
+
+                    // Steamid
+                    || self.record_search.parse::<u64>().is_ok_and(|_| {
+                        format!("{}", u64::from(*s)).contains(&self.record_search)
+                    })
+
+                    // Current name
+                    || self
+                        .mac
+                        .players
+                        .get_name(*s)
+                        .is_some_and(|n| n.contains(&self.record_search))
+            })
+            .map(|(s, _)| s)
+            .collect();
+
+        self.records_to_display.sort_by_key(|s| {
+            self.mac
+                .players
+                .records
+                .get(s)
+                .expect("Only existing records should be in this list")
+                .modified()
+        });
+        self.records_to_display.reverse();
+    }
+
     fn handle_mac_message(&mut self, message: MACMessage) -> iced::Command<Message> {
         let mut commands = Vec::new();
 
@@ -479,37 +534,44 @@ impl App {
         iced::Command::batch(commands)
     }
 
-    fn insert_new_pfp(&mut self, pfp_hash: String, bytes: Bytes) {
-        let smol_image = Reader::new(Cursor::new(&bytes))
+    fn insert_new_pfp(&mut self, pfp_hash: String, bytes: &[u8]) {
+        fn default_image() -> image::DynamicImage {
+            image::DynamicImage::ImageRgb8(ImageBuffer::new(
+                u32::from(PFP_FULL_SIZE),
+                u32::from(PFP_FULL_SIZE),
+            ))
+        }
+
+        let full_image = Reader::new(Cursor::new(bytes))
             .with_guessed_format()
             .ok()
             .and_then(|r| r.decode().ok())
-            .map_or_else(
-                || {
-                    image::DynamicImage::ImageRgb8(ImageBuffer::new(
-                        u32::from(PFP_SMALL_SIZE),
-                        u32::from(PFP_SMALL_SIZE),
-                    ))
-                },
-                |di| {
-                    di.resize(
-                        u32::from(PFP_SMALL_SIZE),
-                        u32::from(PFP_SMALL_SIZE),
-                        image::imageops::FilterType::Triangle,
-                    )
-                },
-            )
-            .into_rgba8();
+            .unwrap_or_else(default_image)
+            .resize(
+                u32::from(PFP_FULL_SIZE),
+                u32::from(PFP_FULL_SIZE),
+                image::imageops::FilterType::Triangle,
+            );
 
-        let handle = iced::widget::image::Handle::from_memory(bytes);
+        let smol_image = full_image.resize(
+            u32::from(PFP_SMALL_SIZE),
+            u32::from(PFP_SMALL_SIZE),
+            image::imageops::FilterType::Triangle,
+        );
+
+        let full_handle = iced::widget::image::Handle::from_pixels(
+            u32::from(PFP_FULL_SIZE),
+            u32::from(PFP_FULL_SIZE),
+            Bytes::copy_from_slice(full_image.into_rgba8().as_bytes()),
+        );
         let smol_handle = iced::widget::image::Handle::from_pixels(
             u32::from(PFP_SMALL_SIZE),
             u32::from(PFP_SMALL_SIZE),
-            Bytes::copy_from_slice(smol_image.as_bytes()),
+            Bytes::copy_from_slice(smol_image.into_rgba8().as_bytes()),
         );
 
         self.pfp_in_progess.remove(&pfp_hash);
-        self.pfp_cache.insert(pfp_hash, (handle, smol_handle));
+        self.pfp_cache.insert(pfp_hash, (full_handle, smol_handle));
     }
 
     fn request_pfp_lookup(&mut self, pfp_hash: &str, pfp_url: &str) -> iced::Command<Message> {

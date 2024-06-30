@@ -1,54 +1,21 @@
-use client_backend::{
-    player_records::{PlayerRecord, Verdict},
-    steamid_ng::SteamID,
-};
+use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
     widget::{self, text, text_input, Button, Container, Scrollable, Space},
     Length,
 };
 
-use super::{copy_button, open_profile_button, verdict_picker, FONT_SIZE};
+use super::{copy_button, open_profile_button, verdict_picker, FONT_SIZE, PFP_SMALL_SIZE};
 use crate::{App, IcedContainer, Message, ALIAS_KEY};
-
-#[allow(clippy::module_name_repetitions)]
-pub fn get_filtered_records(state: &App) -> impl Iterator<Item = (SteamID, &PlayerRecord)> {
-    state
-        .mac
-        .players
-        .records
-        .iter()
-        .map(|(s, r)| (*s, r))
-        .filter(|(_, r)| state.record_verdict_whitelist.contains(&r.verdict()))
-        .filter(|(s, r)| {
-            if state.record_search.is_empty() {
-                return true;
-            }
-
-            r.previous_names()
-                .iter()
-                .any(|n| n.contains(&state.record_search))
-                || state
-                    .record_search
-                    .parse::<u64>()
-                    .is_ok_and(|_| format!("{}", u64::from(*s)).contains(&state.record_search))
-                || state
-                    .mac
-                    .players
-                    .get_name(*s)
-                    .is_some_and(|n| n.contains(&state.record_search))
-        })
-}
 
 #[must_use]
 pub fn view(state: &App) -> IcedContainer<'_> {
-    let mut records: Vec<(SteamID, &PlayerRecord)> = get_filtered_records(state).collect();
-    records.sort_by_key(|(_, r)| r.created());
-
     // Pages
-    let num_pages = records.len() / state.records_per_page + 1;
-    let displaying_start = (state.record_page * state.records_per_page + 1).min(records.len());
+    let num_pages = state.records_to_display.len() / state.records_per_page + 1;
+    let displaying_start =
+        (state.record_page * state.records_per_page + 1).min(state.records_to_display.len());
     let displaying_end = if state.record_page == num_pages - 1 {
-        (num_pages - 1) * state.records_per_page + records.len() % state.records_per_page
+        (num_pages - 1) * state.records_per_page
+            + state.records_to_display.len() % state.records_per_page
     } else {
         (state.record_page + 1) * state.records_per_page
     };
@@ -73,7 +40,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         widget::horizontal_space(Length::Fill),
         widget::text(format!(
             "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
-            records.len(),
+            state.records_to_display.len(),
             if num_pages == 1 { "page" } else { "pages" }
         )),
         widget::horizontal_space(15),
@@ -104,12 +71,13 @@ pub fn view(state: &App) -> IcedContainer<'_> {
 
     // Records
     let mut contents = widget::column![].spacing(3).padding(15);
-    for (s, r) in records
-        .into_iter()
+    for &s in state
+        .records_to_display
+        .iter()
         .skip(state.record_page * state.records_per_page)
         .take(state.records_per_page)
     {
-        contents = contents.push(row(state, s, r));
+        contents = contents.push(row(state, s));
     }
 
     Container::new(widget::column![
@@ -123,13 +91,15 @@ pub fn view(state: &App) -> IcedContainer<'_> {
 }
 
 #[must_use]
-fn row<'a>(state: &'a App, steamid: SteamID, record: &'a PlayerRecord) -> IcedContainer<'a> {
+fn row(state: &App, steamid: SteamID) -> IcedContainer<'_> {
+    let record = state.mac.players.records.get(&steamid);
+
     let mut contents = widget::row![]
         .spacing(5)
         .align_items(iced::Alignment::Center);
 
     // Verdict picker
-    contents = contents.push(verdict_picker(record.verdict(), steamid));
+    contents = contents.push(verdict_picker(state.mac.players.verdict(steamid), steamid));
 
     // SteamID
     contents = contents.push(
@@ -139,20 +109,40 @@ fn row<'a>(state: &'a App, steamid: SteamID, record: &'a PlayerRecord) -> IcedCo
     contents = contents.push(copy_button(format!("{}", u64::from(steamid))));
     contents = contents.push(open_profile_button("Open", steamid));
 
+    // Pfp
+    if let Some((_, pfp)) = state
+        .mac
+        .players
+        .steam_info
+        .get(&steamid)
+        .map(|si| &si.pfp_hash)
+        .and_then(|pfp_hash| state.pfp_cache.get(pfp_hash))
+    {
+        contents = contents.push(
+            widget::image(pfp.clone())
+                .width(PFP_SMALL_SIZE)
+                .height(PFP_SMALL_SIZE),
+        );
+    }
+
     #[allow(clippy::option_if_let_else, clippy::manual_map)]
-    let name_text =
-        if let Some(alias) = record.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()) {
-            Some(alias)
-        } else {
-            state.mac.players.get_name(steamid)
-        };
+    let name_text = if let Some(alias) =
+        record.and_then(|r| r.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()))
+    {
+        Some(alias)
+    } else {
+        state.mac.players.get_name(steamid)
+    };
 
     if let Some(name_text) = name_text {
         contents = contents.push(Space::with_width(10));
         contents = contents.push(widget::text(name_text));
     }
 
-    Container::new(contents)
-        .width(Length::Fill)
-        .height(Length::Shrink)
+    Container::new(
+        contents
+            .align_items(iced::Alignment::Center)
+            .height(PFP_SMALL_SIZE),
+    )
+    .width(Length::Fill)
 }
