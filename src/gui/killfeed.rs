@@ -1,3 +1,4 @@
+use client_backend::player::Team;
 use iced::{
     widget::{self, scrollable::Id, Container, Scrollable},
     Alignment, Length,
@@ -5,7 +6,10 @@ use iced::{
 
 use crate::{App, IcedContainer, Message};
 
-use super::{styles::colours, FONT_SIZE};
+use super::{
+    styles::{colours, ButtonColor},
+    FONT_SIZE,
+};
 
 pub const SCROLLABLE_ID: &str = "Kills";
 
@@ -28,6 +32,20 @@ pub fn view(state: &App) -> IcedContainer<'_> {
 
                 if let Some(steamid) = kill.killer_steamid {
                     killer_name = killer_name.on_press(Message::SelectPlayer(steamid));
+
+                    match state.mac.players.game_info.get(&steamid).map(|gi| gi.team) {
+                        Some(Team::Red) => {
+                            killer_name = killer_name.style(iced::theme::Button::custom(
+                                ButtonColor(colours::team_red_darker()),
+                            ));
+                        }
+                        Some(Team::Blu) => {
+                            killer_name = killer_name.style(iced::theme::Button::custom(
+                                ButtonColor(colours::team_blu_darker()),
+                            ));
+                        }
+                        _ => {}
+                    }
                 }
 
                 row = row.push(Container::new(killer_name).width(Length::FillPortion(1)));
@@ -35,7 +53,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                 // Weapon
                 let mut weapon = widget::text(&kill.weapon).size(FONT_SIZE);
                 if kill.crit {
-                    weapon = weapon.style(colours::red());
+                    weapon = weapon.style(colours::yellow());
                 }
 
                 row = row.push(
@@ -48,6 +66,20 @@ pub fn view(state: &App) -> IcedContainer<'_> {
 
                 if let Some(steamid) = kill.victim_steamid {
                     victim_name = victim_name.on_press(Message::SelectPlayer(steamid));
+
+                    match state.mac.players.game_info.get(&steamid).map(|gi| gi.team) {
+                        Some(Team::Red) => {
+                            victim_name = victim_name.style(iced::theme::Button::custom(
+                                ButtonColor(colours::team_red_darker()),
+                            ));
+                        }
+                        Some(Team::Blu) => {
+                            victim_name = victim_name.style(iced::theme::Button::custom(
+                                ButtonColor(colours::team_blu_darker()),
+                            ));
+                        }
+                        _ => {}
+                    }
                 }
 
                 let row = row.push(

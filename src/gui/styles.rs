@@ -1,5 +1,21 @@
+use iced::{widget::button, Color};
+
 pub mod picklist;
 
+pub struct ButtonColor(pub iced::Color);
+
+impl button::StyleSheet for ButtonColor {
+    fn active(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: Some(iced::Background::Color(self.0)),
+            text_color: Color::WHITE,
+            ..Default::default()
+        }
+    }
+
+    type Style = iced::Theme;
+    // other methods in Stylesheet have a default impl
+}
 pub mod colours {
     use iced::Color;
 
@@ -20,7 +36,7 @@ pub mod colours {
 
     #[must_use]
     pub const fn yellow() -> Color {
-        Color::from_rgb(1.0, 1.0, 0.5)
+        Color::from_rgb(1.0, 1.0, 0.4)
     }
 
     #[must_use]
@@ -36,5 +52,14 @@ pub mod colours {
     #[must_use]
     pub fn team_blu() -> Color {
         Color::from_rgb(88.0 / 255.0, 133.0 / 255.0, 162.0 / 255.0)
+    }
+    #[must_use]
+    pub fn team_red_darker() -> Color {
+        Color::from_rgb(164.0 / 255.0, 36.0 / 255.0, 39.0 / 255.0)
+    }
+
+    #[must_use]
+    pub fn team_blu_darker() -> Color {
+        Color::from_rgb(68.0 / 255.0, 113.0 / 255.0, 162.0 / 255.0)
     }
 }

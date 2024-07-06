@@ -22,8 +22,7 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         contents = contents.push(player::row(state, gi, *s));
     }
 
-    Container::new(Scrollable::new(contents))
+    Container::new(Scrollable::new(contents.padding(15)))
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(15)
 }

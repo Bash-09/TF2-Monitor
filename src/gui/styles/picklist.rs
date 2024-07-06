@@ -1,5 +1,5 @@
 use client_backend::player_records::Verdict;
-use iced::{widget::pick_list, Color};
+use iced::widget::pick_list;
 
 use super::colours;
 

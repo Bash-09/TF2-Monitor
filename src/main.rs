@@ -242,7 +242,7 @@ impl Application for App {
     }
 
     fn title(&self) -> String {
-        String::from("MAC Client")
+        String::from("Bash Client")
     }
 
     fn theme(&self) -> iced::Theme {
@@ -332,7 +332,9 @@ impl Application for App {
                 // Request steam lookup of player if we don't have it currently,
                 return self.request_profile_lookup(vec![steamid]);
             }
-            Message::UnselectPlayer => self.selected_player = None,
+            Message::UnselectPlayer => {
+                return self.unselect_player();
+            }
             Message::PfpLookupResponse(pfp_hash, response) => {
                 if let Ok(bytes) = response {
                     self.insert_new_pfp(pfp_hash, &bytes);
@@ -375,11 +377,11 @@ impl Application for App {
             }
             Message::ToggleChatKillfeed => {
                 if self.selected_player.is_some() {
-                    self.selected_player = None;
                     self.settings.show_chat_and_killfeed = true;
-                } else {
-                    self.settings.show_chat_and_killfeed = !self.settings.show_chat_and_killfeed;
+                    return self.unselect_player();
                 }
+
+                self.settings.show_chat_and_killfeed = !self.settings.show_chat_and_killfeed;
             }
             Message::ProfileLookupRequest(s) => {
                 return self.request_profile_lookup(vec![s]);
@@ -456,6 +458,13 @@ impl App {
                         .players
                         .get_name(*s)
                         .is_some_and(|n| n.contains(&self.record_search))
+
+                    // Alias
+                    || r.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()).is_some_and(|s| s.contains(&self.record_search))
+
+                    // Notes
+                    || r.custom_data().get(NOTES_KEY).and_then(|v| v.as_str()).is_some_and(|s| s.contains(&self.record_search))
+                    
             })
             .map(|(s, _)| s)
             .collect();
@@ -628,6 +637,19 @@ impl App {
             },
             |(pfp_hash, resp)| Message::PfpLookupResponse(pfp_hash, resp),
         )
+    }
+
+    fn unselect_player(&mut self) -> iced::Command<Message> {
+        self.selected_player = None;
+
+        if self.settings.show_chat_and_killfeed {
+            return iced::Command::batch([
+                snap_to(widget::scrollable::Id::new(chat::SCROLLABLE_ID), RelativeOffset { x: 0.0, y: 1.0 }),
+                snap_to(widget::scrollable::Id::new(killfeed::SCROLLABLE_ID), RelativeOffset { x: 0.0, y: 1.0 }),
+            ]);
+        }
+
+        iced::Command::none()
     }
 }
 

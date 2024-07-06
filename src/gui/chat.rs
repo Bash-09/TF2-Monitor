@@ -1,3 +1,4 @@
+use client_backend::player::Team;
 use iced::{
     widget::{self, scrollable::Id, Container, Scrollable},
     Alignment, Length,
@@ -5,7 +6,10 @@ use iced::{
 
 use crate::{App, IcedContainer, Message};
 
-use super::FONT_SIZE;
+use super::{
+    styles::{colours, ButtonColor},
+    FONT_SIZE,
+};
 
 pub const SCROLLABLE_ID: &str = "Chat";
 
@@ -21,10 +25,25 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         |contents, chat| {
             contents.push({
                 let mut row = widget::Row::new().align_items(Alignment::Center).spacing(5);
-                let name =
+
+                let mut name =
                     widget::button(widget::text(&chat.player_name).size(FONT_SIZE)).padding(2);
 
                 if let Some(steamid) = chat.steamid {
+                    match state.mac.players.game_info.get(&steamid).map(|gi| gi.team) {
+                        Some(Team::Red) => {
+                            name = name.style(iced::theme::Button::custom(ButtonColor(
+                                colours::team_red_darker(),
+                            )));
+                        }
+                        Some(Team::Blu) => {
+                            name = name.style(iced::theme::Button::custom(ButtonColor(
+                                colours::team_blu_darker(),
+                            )));
+                        }
+                        _ => {}
+                    }
+
                     row = row.push(name.on_press(Message::SelectPlayer(steamid)));
                 } else {
                     row = row.push(name);
