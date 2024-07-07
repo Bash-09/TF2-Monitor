@@ -20,7 +20,7 @@ use client_backend::{
     state::MACState,
     steamid_ng::SteamID,
 };
-use gui::{chat, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
+use gui::{chat, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -701,6 +701,7 @@ fn main() {
 
     let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));
     iced_settings.window.min_size = Some((600, 400));
+    // iced_settings.fonts.push(&FONT_FILE);
     if let Some(pos) = app_settings.window_pos {
         iced_settings.window.position = iced::window::Position::Specific(pos.0, pos.1);
     }

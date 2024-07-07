@@ -13,6 +13,7 @@ use self::styles::picklist::VerdictPickList;
 
 pub mod chat;
 pub mod history;
+pub mod icons;
 pub mod killfeed;
 pub mod player;
 pub mod records;
