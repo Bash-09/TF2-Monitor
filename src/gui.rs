@@ -4,7 +4,7 @@ use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
     theme,
     widget::{self, column, row, Button, PickList, Rule, Tooltip},
-    Length,
+    Color, Length,
 };
 
 use crate::{App, IcedContainer, IcedElement, Message};
@@ -39,6 +39,31 @@ pub const VERDICT_OPTIONS: &[Verdict] = &[
     Verdict::Suspicious,
     Verdict::Cheater,
     Verdict::Bot,
+];
+
+// taken from https://sashamaps.net/docs/resources/20-colors/
+const COLOR_PALETTE: [Color; 21] = [
+    Color::from_rgb(230.0 / 255.0, 25.0 / 255.0, 75.0 / 255.0),
+    Color::from_rgb(60.0 / 255.0, 180.0 / 255.0, 75.0 / 255.0),
+    Color::from_rgb(1.0, 225.0 / 255.0, 25.0 / 255.0),
+    Color::from_rgb(0.0 / 255.0, 130.0 / 255.0, 200.0 / 255.0),
+    Color::from_rgb(245.0 / 255.0, 130.0 / 255.0, 48.0 / 255.0),
+    Color::from_rgb(145.0 / 255.0, 30.0 / 255.0, 180.0 / 255.0),
+    Color::from_rgb(70.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0),
+    Color::from_rgb(240.0 / 255.0, 50.0 / 255.0, 230.0 / 255.0),
+    Color::from_rgb(210.0 / 255.0, 245.0 / 255.0, 60.0 / 255.0),
+    Color::from_rgb(250.0 / 255.0, 190.0 / 255.0, 212.0 / 255.0),
+    Color::from_rgb(0.0 / 255.0, 128.0 / 255.0, 128.0 / 255.0),
+    Color::from_rgb(220.0 / 255.0, 190.0 / 255.0, 1.0),
+    Color::from_rgb(170.0 / 255.0, 110.0 / 255.0, 40.0 / 255.0),
+    Color::from_rgb(1.0, 250.0 / 255.0, 200.0 / 255.0),
+    Color::from_rgb(128.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0),
+    Color::from_rgb(170.0 / 255.0, 1.0, 195.0 / 255.0),
+    Color::from_rgb(128.0 / 255.0, 128.0 / 255.0, 0.0 / 255.0),
+    Color::from_rgb(1.0, 215.0 / 255.0, 180.0 / 255.0),
+    Color::from_rgb(0.0 / 255.0, 0.0 / 255.0, 128.0 / 255.0),
+    Color::from_rgb(128.0 / 255.0, 128.0 / 255.0, 128.0 / 255.0),
+    Color::from_rgb(1.0, 1.0, 1.0),
 ];
 
 #[must_use]
@@ -152,4 +177,13 @@ pub fn view_select(_: &App) -> IcedElement<'_> {
     .spacing(10);
 
     content.width(Length::Fill).padding(10).into()
+}
+
+#[must_use]
+pub fn tooltip<'a>(
+    element: impl Into<iced::Element<'a, Message, iced::Theme, iced::Renderer>>,
+    tooltip: impl Into<iced::Element<'a, Message, iced::Theme, iced::Renderer>>,
+) -> Tooltip<'a, Message, iced::Theme, iced::Renderer> {
+    Tooltip::new(element, tooltip, iced::widget::tooltip::Position::Bottom)
+        .style(theme::Container::Box)
 }

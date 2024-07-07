@@ -139,6 +139,10 @@ fn row(state: &App, steamid: SteamID) -> IcedElement<'_> {
         contents = contents.push(widget::text(name_text));
     }
 
+    contents = contents.push(widget::horizontal_space());
+    contents = contents.push(super::player::badges(state, steamid, None));
+    contents = contents.push(widget::Space::with_width(5));
+
     contents
         .align_items(iced::Alignment::Center)
         .height(PFP_SMALL_SIZE)

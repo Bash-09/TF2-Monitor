@@ -1,19 +1,21 @@
 use chrono::{DateTime, Datelike, Utc};
 use client_backend::{
-    player::{GameInfo, ProfileVisibility, Team},
+    player::{GameInfo, PlayerState, ProfileVisibility, Team},
     player_records::PlayerRecord,
     steamid_ng::SteamID,
 };
 use iced::{
     alignment::{Horizontal, Vertical},
-    theme,
-    widget::{self, column, Button, Image, Scrollable, Space, TextInput, Tooltip},
+    widget::{self, column, Button, Image, Scrollable, Space, TextInput},
     Alignment, Length,
 };
 
 use super::{
-    copy_button, open_profile_button, styles::colours, verdict_picker, FONT_SIZE, PFP_FULL_SIZE,
-    PFP_SMALL_SIZE,
+    copy_button,
+    icons::{self, icon},
+    open_profile_button,
+    styles::colours,
+    tooltip, verdict_picker, COLOR_PALETTE, FONT_SIZE, PFP_FULL_SIZE, PFP_SMALL_SIZE,
 };
 use crate::{App, IcedElement, Message, ALIAS_KEY, NOTES_KEY};
 
@@ -60,20 +62,13 @@ pub fn view(state: &App, player: SteamID) -> IcedElement<'_> {
     // Name and previous names
     match maybe_record {
         Some(record) if !record.previous_names().is_empty() => {
-            let mut tooltip = String::new();
+            let mut tooltip_text = String::new();
             record
                 .previous_names()
                 .iter()
-                .for_each(|n| tooltip.push_str(&format!("{n}\n")));
+                .for_each(|n| tooltip_text.push_str(&format!("{n}\n")));
 
-            name = name.push(
-                Tooltip::new(
-                    name_text,
-                    widget::text(tooltip),
-                    iced::widget::tooltip::Position::Bottom,
-                )
-                .style(theme::Container::Box),
-            );
+            name = name.push(tooltip(name_text, widget::text(tooltip_text)));
         }
         _ => {
             name = name.push(widget::text(name_text));
@@ -323,52 +318,29 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
             player
         ),
         name,
-        Space::with_width(Length::Fill),
     ]
     .spacing(5)
     .align_items(iced::Alignment::Center)
     .padding(0)
     .width(Length::Fill);
 
-    if let Some(steam) = state.mac.players.steam_info.get(&player) {
-        // Game bans
-        if let Some(days) = steam.days_since_last_ban {
-            if steam.game_bans > 0 {
-                contents = contents.push(
-                    Tooltip::new(
-                        widget::text("G").size(FONT_SIZE),
-                        widget::text(format!(
-                            "{} game ban(s).\nLast ban {} days ago.",
-                            steam.game_bans, days
-                        )),
-                        iced::widget::tooltip::Position::Bottom,
-                    )
-                    .style(theme::Container::Box),
-                );
-            }
-        }
-
-        // Vac bans
-        if let Some(days) = steam.days_since_last_ban {
-            if steam.vac_bans > 0 {
-                contents = contents.push(
-                    Tooltip::new(
-                        widget::text("V").size(FONT_SIZE),
-                        widget::text(format!(
-                            "{} VAC ban(s).\nLast ban {} days ago.",
-                            steam.vac_bans, days
-                        )),
-                        iced::widget::tooltip::Position::Bottom,
-                    )
-                    .style(theme::Container::Box),
-                );
-            }
-        }
-
-        // Young account
-
-        // Friend
+    // Party
+    for (i, _) in state
+        .mac
+        .players
+        .parties
+        .parties()
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.contains(&player))
+    {
+        contents = contents.push(icon(icons::PARTY).style(COLOR_PALETTE[i % COLOR_PALETTE.len()]));
     }
+
+    contents = contents.push(Space::with_width(Length::Fill));
+
+    // Badges
+    contents = contents.push(badges(state, player, Some(game_info)));
 
     // Time
     let hours = game_info.time / (60 * 60);
@@ -388,4 +360,116 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
         .width(Length::Fill)
         .align_items(Alignment::Center)
         .into()
+}
+
+#[must_use]
+pub fn badges<'a>(
+    state: &'a App,
+    player: SteamID,
+    game_info: Option<&'a GameInfo>,
+) -> widget::Row<'a, Message, iced::Theme, iced::Renderer> {
+    let mut contents = widget::row![].spacing(15);
+
+    if let Some(game_info) = game_info {
+        // Spawning
+        if game_info.state == PlayerState::Spawning {
+            contents = contents.push(tooltip(icon(icons::JOINING), widget::text("Joining")));
+        }
+
+        // Disconnected
+        if game_info.state == PlayerState::Disconnected {
+            contents = contents.push(tooltip(
+                icon(icons::DISCONNECT),
+                widget::text("Disconnected"),
+            ));
+        }
+    }
+
+    if let Some(steam) = state.mac.players.steam_info.get(&player) {
+        // Private / Friends only profile
+        if matches!(
+            steam.profile_visibility,
+            ProfileVisibility::Private | ProfileVisibility::FriendsOnly
+        ) {
+            let (col, text) = if steam.profile_visibility == ProfileVisibility::FriendsOnly {
+                (colours::yellow(), "Friends only profile")
+            } else {
+                (colours::red(), "Private profile")
+            };
+
+            contents = contents.push(tooltip(icon(icons::HIDDEN).style(col), widget::text(text)));
+        }
+
+        // VAC and Game bans
+        if let Some(days) = steam.days_since_last_ban {
+            let mut tooltip_element = widget::Column::new();
+
+            if steam.vac_bans > 0 {
+                tooltip_element =
+                    tooltip_element.push(widget::text(format!("{} VAC ban(s)", steam.vac_bans)));
+            }
+            if steam.game_bans > 0 {
+                tooltip_element =
+                    tooltip_element.push(widget::text(format!("{} game ban(s)", steam.game_bans)));
+            }
+
+            tooltip_element =
+                tooltip_element.push(widget::text(format!("Last ban {days} days ago.")));
+
+            contents = contents.push(tooltip(
+                icon(icons::SHIELD).style(colours::red()).size(FONT_SIZE),
+                tooltip_element,
+            ));
+        }
+
+        // Young account
+        if let Some(created) = steam
+            .time_created
+            .and_then(|t| DateTime::from_timestamp(t, 0))
+        {
+            let days = Utc::now().signed_duration_since(created).num_days();
+
+            if days < 100 {
+                contents = contents.push(tooltip(
+                    widget::text("Y")
+                        .style(colours::pink())
+                        .width(15)
+                        .horizontal_alignment(Horizontal::Center),
+                    widget::text(format!("Account only created {days} days ago")),
+                ));
+            }
+        }
+
+        // Old steam info
+    } else {
+        // No steam info
+        contents = contents.push(tooltip(
+            icon(icons::BLOCK),
+            widget::text("No steam info has been fetched"),
+        ));
+    }
+
+    // Friend
+    if state
+        .mac
+        .players
+        .is_friends_with_user(player)
+        .is_some_and(|a| a)
+    {
+        contents = contents.push(icon(icons::FRIEND).style(colours::green()).size(FONT_SIZE));
+    }
+
+    // Notes
+    if let Some(notes) = state
+        .mac
+        .players
+        .records
+        .get(&player)
+        .and_then(|r| r.custom_data().get(NOTES_KEY))
+        .and_then(|v| v.as_str())
+    {
+        contents = contents.push(tooltip(icon(icons::NOTES), widget::text(notes)));
+    }
+
+    contents
 }
