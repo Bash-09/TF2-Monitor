@@ -1,14 +1,14 @@
 use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
-    widget::{self, text, text_input, Button, Container, Scrollable, Space},
+    widget::{self, text, text_input, Button, Scrollable, Space},
     Length,
 };
 
 use super::{copy_button, open_profile_button, verdict_picker, FONT_SIZE, PFP_SMALL_SIZE};
-use crate::{App, IcedContainer, Message, ALIAS_KEY};
+use crate::{App, IcedElement, Message, ALIAS_KEY};
 
 #[must_use]
-pub fn view(state: &App) -> IcedContainer<'_> {
+pub fn view(state: &App) -> IcedElement<'_> {
     // Pages
     let num_pages = state.records_to_display.len() / state.records_per_page + 1;
     let displaying_start =
@@ -21,13 +21,15 @@ pub fn view(state: &App) -> IcedContainer<'_> {
     };
 
     let button = |contents: &str| {
-        widget::button(widget::column![text(contents)].align_items(iced::Alignment::Center))
-            .width(30)
-            .height(30)
+        widget::button(
+            widget::column![widget::text(contents)]
+                .width(25)
+                .align_items(iced::Alignment::Center),
+        )
     };
 
     let header = widget::row![
-        widget::horizontal_space(15),
+        widget::Space::with_width(15),
         button("<<").on_press(Message::SetRecordPage(0)),
         button("<").on_press(Message::SetRecordPage(state.record_page.saturating_sub(1))),
         widget::column![text(format!("{}", state.record_page + 1))]
@@ -37,23 +39,20 @@ pub fn view(state: &App) -> IcedContainer<'_> {
             state.record_page.saturating_add(1).min(num_pages - 1)
         )),
         button(">>").on_press(Message::SetRecordPage(num_pages - 1)),
-        widget::horizontal_space(Length::Fill),
+        widget::horizontal_space(),
         widget::text(format!(
             "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
             state.records_to_display.len(),
             if num_pages == 1 { "page" } else { "pages" }
         )),
-        widget::horizontal_space(15),
+        widget::Space::with_width(15),
     ]
     .spacing(3)
     .align_items(iced::Alignment::Center);
 
     let filter_checkbox = |v: Verdict| {
-        widget::checkbox(
-            format!("{v}"),
-            state.record_verdict_whitelist.contains(&v),
-            move |_| Message::ToggleVerdictFilter(v),
-        )
+        widget::checkbox(format!("{v}"), state.record_verdict_whitelist.contains(&v))
+            .on_toggle(move |_| Message::ToggleVerdictFilter(v))
     };
 
     let filters = widget::row![
@@ -80,18 +79,19 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         contents = contents.push(row(state, s));
     }
 
-    Container::new(widget::column![
-        widget::vertical_space(15),
+    widget::column![
+        widget::Space::with_height(15),
         header,
         filters,
         Scrollable::new(contents)
-    ])
+    ]
     .width(Length::Fill)
     .height(Length::Fill)
+    .into()
 }
 
 #[must_use]
-fn row(state: &App, steamid: SteamID) -> IcedContainer<'_> {
+fn row(state: &App, steamid: SteamID) -> IcedElement<'_> {
     let record = state.mac.players.records.get(&steamid);
 
     let mut contents = widget::row![]
@@ -139,10 +139,9 @@ fn row(state: &App, steamid: SteamID) -> IcedContainer<'_> {
         contents = contents.push(widget::text(name_text));
     }
 
-    Container::new(
-        contents
-            .align_items(iced::Alignment::Center)
-            .height(PFP_SMALL_SIZE),
-    )
-    .width(Length::Fill)
+    contents
+        .align_items(iced::Alignment::Center)
+        .height(PFP_SMALL_SIZE)
+        .width(Length::Fill)
+        .into()
 }

@@ -3,15 +3,15 @@ use client_backend::{
     settings::FriendsAPIUsage,
 };
 use iced::{
-    widget::{self, Container, Scrollable},
+    widget::{self, Scrollable},
     Length,
 };
 
-use crate::{App, IcedContainer, MACMessage, Message};
+use crate::{App, IcedElement, MACMessage, Message};
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
+pub fn view<'a>(state: &'a App) -> IcedElement<'_> {
     const HEADING_SIZE: u16 = 25;
     const HEADING_SPACING: u16 = 15;
     const HALF_WIDTH: Length = Length::FillPortion(1);
@@ -32,17 +32,15 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
         .style(iced::theme::Container::Box)
     };
 
-    let stretch = || widget::horizontal_space(Length::Fill);
     let heading = |heading: &str| {
         widget::row![
-            stretch(),
+            widget::horizontal_space(),
             widget::text(heading).size(HEADING_SIZE),
-            stretch()
+            widget::horizontal_space()
         ]
     };
 
-    Container::new(
-        Scrollable::new(
+    Scrollable::new(
 
             // RCON
         widget::column![
@@ -95,7 +93,7 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
             .spacing(ROW_SPACING),
 
             // STEAM
-            widget::vertical_space(HEADING_SPACING),
+            widget::Space::with_height(HEADING_SPACING),
             heading("Steam API"),
 
             // Steam API key
@@ -117,7 +115,7 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                 ).width(HALF_WIDTH),
                 widget::row![
                     tooltip("Steam API key", "Your Steam Web API key is used to lookup player profiles and friend information from the Steam Web API."),
-                    stretch(),
+                    widget::horizontal_space(),
                     widget::button("Get yours here").on_press(Message::Open("https://steamcommunity.com/dev/apikey".to_string())),
                 ].width(HALF_WIDTH),
             ].align_items(iced::Alignment::Center)
@@ -144,7 +142,7 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
             ].align_items(iced::Alignment::Center).spacing(5),
 
             // MASTERBASE
-            widget::vertical_space(HEADING_SPACING),
+            widget::Space::with_height(HEADING_SPACING),
             heading("Masterbase"),
 
             // Masterbase key
@@ -166,7 +164,7 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
                 ).width(HALF_WIDTH),
                 widget::row![
                     tooltip("Masterbase key", "Your personal key for authenticating with the Masterbase."),
-                    stretch(),
+                    widget::horizontal_space(),
                     widget::button("Get yours here").on_press(Message::Open(format!("{}://{}/provision", if state.mac.settings.use_masterbase_http() {"http"} else {"https"}, state.mac.settings.masterbase_host() ))),
                 ].width(HALF_WIDTH),
             ].align_items(iced::Alignment::Center)
@@ -196,13 +194,13 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
             .spacing(ROW_SPACING),
 
             // OTHER
-            widget::vertical_space(HEADING_SPACING),
+            widget::Space::with_height(HEADING_SPACING),
             heading("Other"),
 
             // Autokick bots
             widget::row![
                 widget::tooltip(
-                    widget::checkbox("Autokick bots", state.mac.settings.autokick_bots(), Message::SetKickBots),
+                    widget::checkbox("Autokick bots", state.mac.settings.autokick_bots()).on_toggle(Message::SetKickBots),
                     "Attempt to automatically kick bots on your team. This does not account for cooldowns or ongoing votes, so use at your own discretion.",
                     widget::tooltip::Position::Bottom,
                 )
@@ -214,5 +212,5 @@ pub fn view<'a>(state: &'a App) -> IcedContainer<'_> {
         .width(Length::Fill)
         .spacing(5)
         .padding(15),
-    ))
+    ).into()
 }

@@ -3,11 +3,11 @@ use std::rc::Rc;
 use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
     theme,
-    widget::{self, column, row, Button, Container, PickList, Rule, Tooltip},
+    widget::{self, column, row, Button, PickList, Rule, Tooltip},
     Length,
 };
 
-use crate::{App, IcedContainer, Message};
+use crate::{App, IcedContainer, IcedElement, Message};
 
 use self::styles::picklist::VerdictPickList;
 
@@ -51,10 +51,9 @@ pub fn open_profile_button<'a>(
             "https://steamcommunity.com/profiles/{}",
             u64::from(steamid)
         ))),
-        "Open Profile",
+        widget::text("Open Profile").size(FONT_SIZE),
         iced::widget::tooltip::Position::Bottom,
     )
-    .size(FONT_SIZE)
     .style(theme::Container::Box)
 }
 
@@ -64,10 +63,9 @@ pub fn copy_button_with_text<'a>(button_text: impl ToString) -> Tooltip<'a, Mess
     Tooltip::new(
         Button::new(widget::text(button_text).size(FONT_SIZE))
             .on_press(Message::CopyToClipboard(copy)),
-        "Copy",
+        widget::text("Copy").size(FONT_SIZE),
         widget::tooltip::Position::Bottom,
     )
-    .size(FONT_SIZE)
     .style(theme::Container::Box)
 }
 
@@ -77,7 +75,10 @@ pub fn copy_button<'a>(to_copy: String) -> Button<'a, Message> {
 }
 
 #[must_use]
-pub fn verdict_picker<'a>(verdict: Verdict, steamid: SteamID) -> PickList<'a, Verdict, Message> {
+pub fn verdict_picker<'a>(
+    verdict: Verdict,
+    steamid: SteamID,
+) -> PickList<'a, Verdict, &'a [Verdict], Verdict, Message> {
     let style = iced::theme::PickList::Custom(
         Rc::new(VerdictPickList(verdict)),
         Rc::new(VerdictPickList(verdict)),
@@ -92,25 +93,26 @@ pub fn verdict_picker<'a>(verdict: Verdict, steamid: SteamID) -> PickList<'a, Ve
 }
 
 #[must_use]
-pub fn main_window(state: &App) -> IcedContainer<'_> {
+pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
     const SPLIT: [u16; 2] = [7, 3];
     // Right panel is either chat + killfeed or the currently selected player
-    let right_panel = match (state.selected_player, state.settings.show_chat_and_killfeed) {
-        (Some(steamid), _) => Some(player::view(state, steamid)),
-        (None, true) => Some(Container::new(column![
-            chat::view(state)
-                .width(Length::Fill)
-                .height(Length::FillPortion(1)),
-            Rule::horizontal(1),
-            killfeed::view(state)
-                .width(Length::Fill)
-                .height(Length::FillPortion(1))
-        ])),
-        (None, false) => None,
-    };
+    let right_panel: Option<IcedContainer<'_>> =
+        match (state.selected_player, state.settings.show_chat_and_killfeed) {
+            (Some(steamid), _) => Some(widget::Container::new(player::view(state, steamid))),
+            (None, true) => Some(widget::Container::new(column![
+                widget::Container::new(chat::view(state))
+                    .width(Length::Fill)
+                    .height(Length::FillPortion(1)),
+                Rule::horizontal(1),
+                widget::Container::new(killfeed::view(state))
+                    .width(Length::Fill)
+                    .height(Length::FillPortion(1))
+            ])),
+            (None, false) => None,
+        };
 
     // Rest of the view
-    let mut content = row![column![
+    let mut content = widget::row![widget::column![
         view_select(state),
         Rule::horizontal(1),
         match state.view {
@@ -121,7 +123,7 @@ pub fn main_window(state: &App) -> IcedContainer<'_> {
         }
     ]
     .width(Length::FillPortion(SPLIT[0]))
-    .height(Length::Fill),];
+    .height(Length::Fill)];
 
     if let Some(right_panel) = right_panel {
         content = content.push(Rule::vertical(1)).push(
@@ -131,24 +133,23 @@ pub fn main_window(state: &App) -> IcedContainer<'_> {
         );
     }
 
-    Container::new(content)
+    content
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y()
+        .align_items(iced::Alignment::Center)
 }
 
 #[must_use]
-pub fn view_select(_: &App) -> IcedContainer<'_> {
+pub fn view_select(_: &App) -> IcedElement<'_> {
     let content = row![
         Button::new("Server").on_press(Message::SetView(View::Server)),
         Button::new("History").on_press(Message::SetView(View::History)),
         Button::new("Records").on_press(Message::SetView(View::Records)),
         Button::new("Settings").on_press(Message::SetView(View::Settings)),
-        widget::horizontal_space(Length::Fill),
+        widget::horizontal_space(),
         Button::new("Chat and Killfeed").on_press(Message::ToggleChatKillfeed),
     ]
     .spacing(10);
 
-    Container::new(content).width(Length::Fill).padding(10)
+    content.width(Length::Fill).padding(10).into()
 }

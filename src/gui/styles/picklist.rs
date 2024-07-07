@@ -1,5 +1,5 @@
 use client_backend::player_records::Verdict;
-use iced::widget::pick_list;
+use iced::{widget::pick_list, Border};
 
 use super::colours;
 
@@ -14,9 +14,11 @@ impl iced::overlay::menu::StyleSheet for VerdictPickList {
         iced::overlay::menu::Appearance {
             text_color: palette.background.weak.text,
             background: palette.background.weak.color.into(),
-            border_width: 1.0,
-            border_radius: 0.0.into(),
-            border_color: palette.background.strong.color,
+            border: Border {
+                color: palette.background.strong.color,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
             selected_text_color: palette.primary.strong.text,
             selected_background: palette.primary.strong.color.into(),
         }
@@ -42,9 +44,11 @@ impl pick_list::StyleSheet for VerdictPickList {
             background: palette.background.weak.color.into(),
             placeholder_color: palette.background.strong.color,
             handle_color: palette.background.weak.text,
-            border_radius: 2.0.into(),
-            border_width: 1.0,
-            border_color: verdict_col,
+            border: Border {
+                radius: 2.0.into(),
+                width: 1.0,
+                color: verdict_col,
+            },
         }
     }
 
@@ -56,9 +60,11 @@ impl pick_list::StyleSheet for VerdictPickList {
             background: palette.background.weak.color.into(),
             placeholder_color: palette.background.strong.color,
             handle_color: palette.background.weak.text,
-            border_radius: 2.0.into(),
-            border_width: 1.0,
-            border_color: palette.primary.strong.color,
+            border: Border {
+                radius: 2.0.into(),
+                width: 1.0,
+                color: palette.primary.strong.color,
+            },
         }
     }
 }

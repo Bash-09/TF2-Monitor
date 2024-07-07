@@ -7,7 +7,7 @@ use client_backend::{
 use iced::{
     alignment::{Horizontal, Vertical},
     theme,
-    widget::{self, column, Button, Container, Image, Scrollable, Space, TextInput, Tooltip},
+    widget::{self, column, Button, Image, Scrollable, Space, TextInput, Tooltip},
     Alignment, Length,
 };
 
@@ -15,10 +15,10 @@ use super::{
     copy_button, open_profile_button, styles::colours, verdict_picker, FONT_SIZE, PFP_FULL_SIZE,
     PFP_SMALL_SIZE,
 };
-use crate::{App, IcedContainer, Message, ALIAS_KEY, NOTES_KEY};
+use crate::{App, IcedElement, Message, ALIAS_KEY, NOTES_KEY};
 
 #[allow(clippy::too_many_lines)]
-pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
+pub fn view(state: &App, player: SteamID) -> IcedElement<'_> {
     let mut contents = column![].spacing(7);
 
     // pfp and close buttons
@@ -67,8 +67,12 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
                 .for_each(|n| tooltip.push_str(&format!("{n}\n")));
 
             name = name.push(
-                Tooltip::new(name_text, tooltip, iced::widget::tooltip::Position::Bottom)
-                    .style(theme::Container::Box),
+                Tooltip::new(
+                    name_text,
+                    widget::text(tooltip),
+                    iced::widget::tooltip::Position::Bottom,
+                )
+                .style(theme::Container::Box),
             );
         }
         _ => {
@@ -80,7 +84,7 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
     if let Some(alias) =
         maybe_record.and_then(|r| r.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()))
     {
-        name = name.push(widget::horizontal_space(Length::Fill));
+        name = name.push(widget::horizontal_space());
         name = name.push(widget::text(format!("({alias})")));
     }
 
@@ -115,7 +119,7 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
 
     // Game info
     if let Some(gi) = state.mac.players.game_info.get(&player) {
-        contents = contents.push(widget::vertical_space(15));
+        contents = contents.push(widget::Space::with_height(15));
         contents = contents.push(
             widget::text("Game Info")
                 .width(Length::Fill)
@@ -150,7 +154,7 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
     }
 
     // Account info
-    contents = contents.push(widget::vertical_space(15));
+    contents = contents.push(widget::Space::with_height(15));
     if let Some(si) = state.mac.players.steam_info.get(&player) {
         let age = Utc::now().signed_duration_since(si.fetched);
 
@@ -248,7 +252,7 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
             widget::row![
                 widget::button(widget::text("Refresh account info").size(FONT_SIZE))
                     .on_press(Message::ProfileLookupRequest(player)),
-                widget::horizontal_space(Length::Fill),
+                widget::horizontal_space(),
                 widget::text(format!(
                     "(Last refreshed {})",
                     if age.num_days() > 2 {
@@ -276,14 +280,15 @@ pub fn view(state: &App, player: SteamID) -> IcedContainer<'_> {
         );
     }
 
-    Container::new(Scrollable::new(contents.padding(15)))
+    Scrollable::new(contents.padding(15))
         .width(Length::Fill)
         .height(Length::Fill)
+        .into()
 }
 
 #[must_use]
 #[allow(clippy::module_name_repetitions)]
-pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> IcedContainer<'a> {
+pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> IcedElement<'a> {
     // pfp + name
     let mut name = widget::row![];
 
@@ -332,10 +337,10 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
                 contents = contents.push(
                     Tooltip::new(
                         widget::text("G").size(FONT_SIZE),
-                        format!(
+                        widget::text(format!(
                             "{} game ban(s).\nLast ban {} days ago.",
                             steam.game_bans, days
-                        ),
+                        )),
                         iced::widget::tooltip::Position::Bottom,
                     )
                     .style(theme::Container::Box),
@@ -349,10 +354,10 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
                 contents = contents.push(
                     Tooltip::new(
                         widget::text("V").size(FONT_SIZE),
-                        format!(
+                        widget::text(format!(
                             "{} VAC ban(s).\nLast ban {} days ago.",
                             steam.vac_bans, days
-                        ),
+                        )),
                         iced::widget::tooltip::Position::Bottom,
                     )
                     .style(theme::Container::Box),
@@ -377,7 +382,10 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
     };
 
     contents = contents.push(widget::text(time).size(FONT_SIZE));
-    contents = contents.push(widget::horizontal_space(5));
+    contents = contents.push(widget::Space::with_width(5));
 
-    Container::new(contents).width(Length::Fill).center_y()
+    contents
+        .width(Length::Fill)
+        .align_items(Alignment::Center)
+        .into()
 }

@@ -4,7 +4,7 @@ use iced::{
     Alignment, Length,
 };
 
-use crate::{App, IcedContainer, Message};
+use crate::{App, IcedElement, Message};
 
 use super::{
     styles::{colours, ButtonColor},
@@ -14,7 +14,7 @@ use super::{
 pub const SCROLLABLE_ID: &str = "Kills";
 
 #[must_use]
-pub fn view(state: &App) -> IcedContainer<'_> {
+pub fn view(state: &App) -> impl Into<IcedElement<'_>> {
     // TODO - Virtualise this by using the on_scroll thing
 
     let contents = state.mac.server.kill_history().iter().fold(
@@ -86,14 +86,12 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                     Container::new(victim_name).width(Length::FillPortion(1)), // .align_x(Horizontal::Right),
                 );
 
-                row.push(widget::horizontal_space(5.0))
+                row.push(widget::Space::with_width(5.0))
             })
         },
     );
 
-    Container::new(
-        Scrollable::new(contents)
-            .id(Id::new(SCROLLABLE_ID))
-            .on_scroll(|v| Message::ScrolledKills(v.relative_offset())),
-    )
+    Scrollable::new(contents)
+        .id(Id::new(SCROLLABLE_ID))
+        .on_scroll(|v| Message::ScrolledKills(v.relative_offset()))
 }

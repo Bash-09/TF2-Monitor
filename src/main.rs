@@ -1,3 +1,5 @@
+#![allow(clippy::cast_precision_loss)]
+
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
@@ -27,7 +29,6 @@ use iced::{
     widget::{
         self,
         scrollable::{snap_to, RelativeOffset},
-        Container,
     },
     Application,
 };
@@ -106,7 +107,8 @@ pub struct Client {
     pub mac_event_handler: EventLoop<MACState, MACMessage, MACHandler>,
 }
 
-type IcedContainer<'a> = Container<'a, Message, iced::Renderer<iced::Theme>>;
+type IcedElement<'a> = iced::Element<'a, Message, iced::Theme, iced::Renderer>;
+type IcedContainer<'a> = iced::widget::Container<'a, Message, iced::Theme, iced::Renderer>;
 
 pub struct App {
     mac: MACState,
@@ -254,7 +256,7 @@ impl Application for App {
         let demo_path = self.mac.settings.tf2_directory().join("tf");
 
         iced::Subscription::batch([
-            iced::subscription::events().map(Message::EventOccurred),
+            // iced::subscription::events().map(Message::EventOccurred),
             iced::time::every(Duration::from_secs(2))
                 .map(|_| Message::MAC(MACMessage::Refresh(Refresh))),
             iced::time::every(Duration::from_millis(500))
@@ -302,10 +304,10 @@ impl Application for App {
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
         match message {
             Message::None => {}
-            Message::EventOccurred(Event::Window(iced::window::Event::Moved { x, y })) => {
+            Message::EventOccurred(Event::Window(_, iced::window::Event::Moved { x, y })) => {
                 self.settings.window_pos = Some((x, y));
             }
-            Message::EventOccurred(Event::Window(iced::window::Event::Resized {
+            Message::EventOccurred(Event::Window(_, iced::window::Event::Resized {
                 width,
                 height,
             })) => {
@@ -391,7 +393,7 @@ impl Application for App {
         iced::Command::none()
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+    fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
         gui::main_window(self).into()
     }
 }
@@ -700,13 +702,14 @@ fn main() {
         .add_handler(LookupFriends::new());
 
     let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));
-    iced_settings.window.min_size = Some((600, 400));
+    iced_settings.window.min_size = Some(iced::Size::new(600.0, 400.0));
+    iced_settings.fonts.push(FONT_FILE.into());
     // iced_settings.fonts.push(&FONT_FILE);
-    if let Some(pos) = app_settings.window_pos {
-        iced_settings.window.position = iced::window::Position::Specific(pos.0, pos.1);
+    if let Some((x, y)) = app_settings.window_pos {
+        iced_settings.window.position = iced::window::Position::Specific(iced::Point::new(x as f32, y as f32));
     }
-    if let Some(size) = app_settings.window_size {
-        iced_settings.window.size = size;
+    if let Some((width, height)) = app_settings.window_size {
+        iced_settings.window.size = iced::Size::new(width as f32, height as f32);
     }
 
     App::run(iced_settings).expect("Failed to run app.");

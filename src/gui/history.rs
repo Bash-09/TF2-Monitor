@@ -1,14 +1,14 @@
 use iced::{
-    widget::{self, Container, Scrollable},
+    widget::{self, Scrollable},
     Length,
 };
 
-use crate::{App, IcedContainer};
+use crate::{App, IcedElement};
 
 use super::player;
 
 #[must_use]
-pub fn view(state: &App) -> IcedContainer<'_> {
+pub fn view(state: &App) -> IcedElement<'_> {
     let mut contents = widget::column![].spacing(7);
 
     for (gi, s) in state
@@ -22,7 +22,8 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         contents = contents.push(player::row(state, gi, *s));
     }
 
-    Container::new(Scrollable::new(contents.padding(15)))
+    Scrollable::new(contents.padding(15))
         .width(Length::Fill)
         .height(Length::Fill)
+        .into()
 }

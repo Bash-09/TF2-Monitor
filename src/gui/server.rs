@@ -3,15 +3,15 @@ use client_backend::{
     steamid_ng::SteamID,
 };
 use iced::{
-    widget::{column, row, text, Container, Scrollable, Space},
+    widget::{column, row, text, Scrollable, Space},
     Color, Length,
 };
 
 use super::player;
-use crate::{App, IcedContainer};
+use crate::{App, IcedElement};
 
 #[must_use]
-pub fn view(state: &App) -> IcedContainer<'_> {
+pub fn view(state: &App) -> IcedElement<'_> {
     let mut players: Vec<(SteamID, &GameInfo)> = state
         .mac
         .players
@@ -101,5 +101,5 @@ pub fn view(state: &App) -> IcedContainer<'_> {
         contents = contents.push(others);
     }
 
-    Container::new(Scrollable::new(contents)).width(Length::Fill)
+    Scrollable::new(contents).width(Length::Fill).into()
 }

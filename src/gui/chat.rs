@@ -1,10 +1,10 @@
 use client_backend::player::Team;
 use iced::{
-    widget::{self, scrollable::Id, Container, Scrollable},
-    Alignment, Length,
+    widget::{self, scrollable::Id, Scrollable},
+    Alignment,
 };
 
-use crate::{App, IcedContainer, Message};
+use crate::{App, IcedElement, Message};
 
 use super::{
     styles::{colours, ButtonColor},
@@ -14,7 +14,7 @@ use super::{
 pub const SCROLLABLE_ID: &str = "Chat";
 
 #[must_use]
-pub fn view(state: &App) -> IcedContainer<'_> {
+pub fn view(state: &App) -> IcedElement<'_> {
     // TODO - Virtualise this by using the on_scroll thing
 
     let contents = state.mac.server.chat_history().iter().fold(
@@ -50,16 +50,15 @@ pub fn view(state: &App) -> IcedContainer<'_> {
                 }
 
                 row = row.push(widget::text(&chat.message).size(FONT_SIZE));
-                row = row.push(widget::horizontal_space(Length::Fill));
+                row = row.push(widget::horizontal_space());
 
                 row
             })
         },
     );
 
-    Container::new(
-        Scrollable::new(contents)
-            .id(Id::new(SCROLLABLE_ID))
-            .on_scroll(|v| Message::ScrolledChat(v.relative_offset())),
-    )
+    Scrollable::new(contents)
+        .id(Id::new(SCROLLABLE_ID))
+        .on_scroll(|v| Message::ScrolledChat(v.relative_offset()))
+        .into()
 }
