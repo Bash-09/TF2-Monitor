@@ -18,7 +18,7 @@ use crate::{
     player::{Friend, SteamInfo},
     player_records::{PlayerRecord, Verdict},
     settings::FriendsAPIUsage,
-    state::MACState,
+    state::MonitorState,
 };
 
 const BATCH_SIZE: usize = 20; // adjust as needed
@@ -45,8 +45,8 @@ type ProfileResult = Result<Vec<(SteamID, Result<SteamInfo, SteamAPIError>)>, St
 
 #[derive(Debug)]
 pub struct ProfileLookupResult(pub ProfileResult);
-impl Message<MACState> for ProfileLookupResult {
-    fn update_state(self, state: &mut MACState) {
+impl Message<MonitorState> for ProfileLookupResult {
+    fn update_state(self, state: &mut MonitorState) {
         let results = match &self.0 {
             Err(e) => {
                 tracing::error!("Profile lookup failed: {e}");
@@ -80,8 +80,8 @@ pub struct FriendLookupResult {
     steamid: SteamID,
     result: Result<Vec<Friend>, SteamAPIError>,
 }
-impl Message<MACState> for FriendLookupResult {
-    fn update_state(self, state: &mut MACState) {
+impl Message<MonitorState> for FriendLookupResult {
+    fn update_state(self, state: &mut MonitorState) {
         match self.result {
             Err(_) => {
                 state.players.mark_friends_list_private(self.steamid);
@@ -124,12 +124,12 @@ impl Default for LookupProfiles {
     }
 }
 
-impl<IM, OM> MessageHandler<MACState, IM, OM> for LookupProfiles
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for LookupProfiles
 where
     IM: Is<NewPlayers> + Is<ProfileLookupBatchTick> + Is<Preferences> + Is<ProfileLookupRequest>,
     OM: Is<ProfileLookupResult>,
 {
-    fn handle_message(&mut self, state: &MACState, message: &IM) -> Option<Handled<OM>> {
+    fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         // Re-request connected players if the API key has changed
         if let Some(Preferences {
             internal:
@@ -251,7 +251,7 @@ impl LookupFriends {
     /// state
     fn handle_players<'a, M: Is<FriendLookupResult>>(
         &mut self,
-        state: &MACState,
+        state: &MonitorState,
         players: impl IntoIterator<Item = &'a SteamID>,
         policy: FriendsAPIUsage,
         key: &str,
@@ -320,12 +320,12 @@ impl Default for LookupFriends {
     }
 }
 
-impl<IM, OM> MessageHandler<MACState, IM, OM> for LookupFriends
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for LookupFriends
 where
     IM: Is<NewPlayers> + Is<FriendLookupResult> + Is<UserUpdates> + Is<Preferences>,
     OM: Is<FriendLookupResult>,
 {
-    fn handle_message(&mut self, state: &MACState, message: &IM) -> Option<Handled<OM>> {
+    fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         if state.settings.steam_api_key().is_empty() {
             return Handled::none();
         }

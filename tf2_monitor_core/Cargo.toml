@@ -1,16 +1,16 @@
 workspace = { members = ["event_loop"] }
 [package]
-name = "client-backend"
+name = "tf2_monitor_core"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
 [[bin]]
-name = "client_backend"
+name = "tf2_monitor_core"
 path = "src/main.rs"
 
 [lib]
-name = "client_backend"
+name = "tf2_monitor_core"
 path = "src/lib.rs"
 
 [lints.rust]

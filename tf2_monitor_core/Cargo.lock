@@ -356,51 +356,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
 
 [[package]]
-name = "client-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "atomic-write-file",
- "axum",
- "bitbuffer",
- "chrono",
- "clap",
- "clap_lex 0.5.1",
- "directories-next",
- "embed-resource",
- "event_loop",
- "futures",
- "ico",
- "include_dir",
- "keyvalues-parser 0.1.0",
- "keyvalues-serde 0.1.0",
- "notify",
- "open",
- "pot",
- "rcon",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "serde_yaml",
- "steamid-ng",
- "steamlocate",
- "substring",
- "tappet",
- "tf-demo-parser",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite",
- "tower-http",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2609,6 +2564,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "tf2_monitor_core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "atomic-write-file",
+ "axum",
+ "bitbuffer",
+ "chrono",
+ "clap",
+ "clap_lex 0.5.1",
+ "directories-next",
+ "embed-resource",
+ "event_loop",
+ "futures",
+ "ico",
+ "include_dir",
+ "keyvalues-parser 0.1.0",
+ "keyvalues-serde 0.1.0",
+ "notify",
+ "open",
+ "pot",
+ "rcon",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "steamid-ng",
+ "steamlocate",
+ "substring",
+ "tappet",
+ "tf-demo-parser",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2771,7 +2771,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.22.14",
+ "toml_edit 0.22.15",
 ]
 
 [[package]]
@@ -2796,9 +2796,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.14"
+version = "0.22.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f21c7aaf97f1bd9ca9d4f9e73b0a6c74bd5afef56f2bc931943a6e1c37e04e38"
+checksum = "d59a3a72298453f564e2b111fa896f8d07fabb36f51f06d7e875fc5e0b5a3ef1"
 dependencies = [
  "indexmap",
  "serde",

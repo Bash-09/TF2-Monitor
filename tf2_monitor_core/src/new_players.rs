@@ -2,7 +2,7 @@ use event_loop::{try_get, Handled, Is, MessageHandler};
 use steamid_ng::SteamID;
 
 use super::console::ConsoleOutput;
-use crate::state::MACState;
+use crate::state::MonitorState;
 
 // Messages *********************
 
@@ -14,14 +14,14 @@ impl<S> event_loop::Message<S> for NewPlayers {}
 
 #[allow(clippy::module_name_repetitions)]
 pub struct ExtractNewPlayers;
-impl<IM, OM> MessageHandler<MACState, IM, OM> for ExtractNewPlayers
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for ExtractNewPlayers
 where
     IM: Is<ConsoleOutput>,
     OM: Is<NewPlayers>,
 {
     fn handle_message(
         &mut self,
-        state: &MACState,
+        state: &MonitorState,
         message: &IM,
     ) -> Option<event_loop::Handled<OM>> {
         let console_out: &ConsoleOutput = try_get(message)?;

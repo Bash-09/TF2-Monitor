@@ -1,13 +1,13 @@
 use crate::{console::ConsoleOutput, player::Players, server::Server, settings::Settings};
 
 #[allow(clippy::module_name_repetitions)]
-pub struct MACState {
+pub struct MonitorState {
     pub server: Server,
     pub settings: Settings,
     pub players: Players,
 }
 
-impl MACState {
+impl MonitorState {
     pub fn handle_console_output(&mut self, output: ConsoleOutput) {
         use ConsoleOutput::{
             Chat, DemoStop, Hostname, Kill, Map, PlayerCount, ServerIP, Status, G15,

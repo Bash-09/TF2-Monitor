@@ -13,7 +13,7 @@ use crate::{
             REGEX_PLAYERCOUNT, REGEX_STATUS,
         },
     },
-    state::MACState,
+    state::MonitorState,
 };
 
 #[derive(Debug, Clone)]
@@ -70,8 +70,8 @@ pub enum ConsoleOutput {
     G15(Vec<G15Player>),
     DemoStop(DemoStop),
 }
-impl Message<MACState> for ConsoleOutput {
-    fn preprocess(&mut self, state: &MACState) {
+impl Message<MonitorState> for ConsoleOutput {
+    fn preprocess(&mut self, state: &MonitorState) {
         match self {
             Self::Chat(m) => {
                 m.steamid = state.players.get_steamid_from_name(&m.player_name);
@@ -83,7 +83,7 @@ impl Message<MACState> for ConsoleOutput {
             _ => {}
         }
     }
-    fn update_state(self, state: &mut MACState) {
+    fn update_state(self, state: &mut MonitorState) {
         state.handle_console_output(self);
     }
 }

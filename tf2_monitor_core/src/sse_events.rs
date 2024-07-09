@@ -2,7 +2,7 @@ use crate::{
     console::ConsoleOutput,
     demo::{DemoEvent, DemoMessage},
     io::regexes::{ChatMessage, DemoStop, PlayerKill},
-    state::MACState,
+    state::MonitorState,
     web::broadcast_event,
 };
 use chrono::{DateTime, Utc};
@@ -157,7 +157,7 @@ impl Default for SseEventBroadcaster {
 /// endpoint, but data is shipped when _we_ want and the clients have to respond.
 ///
 /// See `broadcast_event` in `crate::web` for more info
-impl<IM, OM> MessageHandler<MACState, IM, OM> for SseEventBroadcaster
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for SseEventBroadcaster
 where
     IM: Is<DemoMessage> + Is<ConsoleOutput>,
 {
@@ -167,7 +167,7 @@ where
     /// the message serialisation.
     /// If a `String` was returned, we broadcast that message to all subscribers.
     #[allow(clippy::cognitive_complexity)]
-    fn handle_message(&mut self, state: &MACState, message: &IM) -> Option<Handled<OM>> {
+    fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         let event_json = if let Some(demo_msg) = try_get::<DemoMessage>(message) {
             self.handle_demo_message(state, demo_msg)
         } else if let Some(con_msg) = try_get::<ConsoleOutput>(message) {
@@ -216,7 +216,11 @@ impl SseEventBroadcaster {
     /// Handling `DemoMessages` often requires inspecting or modifying the list of votes that have been
     /// cast. I.e. a `VoteCast` event wont contain information about what the vote options were. So we
     /// have to keep this context ourselves.
-    fn handle_demo_message(&mut self, state: &MACState, message: &DemoMessage) -> Option<String> {
+    fn handle_demo_message(
+        &mut self,
+        state: &MonitorState,
+        message: &DemoMessage,
+    ) -> Option<String> {
         let cloned_msg = message.clone();
         match cloned_msg.event {
             DemoEvent::VoteOptions(options) => {

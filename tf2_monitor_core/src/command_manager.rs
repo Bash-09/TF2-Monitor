@@ -16,7 +16,7 @@ use crate::{
     events::Refresh,
     player::{PlayerState, Team},
     player_records::Verdict,
-    state::MACState,
+    state::MonitorState,
 };
 
 #[derive(Debug, Deserialize, Clone)]
@@ -300,14 +300,14 @@ impl Default for CommandManager {
     }
 }
 
-impl<IM, OM> MessageHandler<MACState, IM, OM> for CommandManager
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for CommandManager
 where
     IM: Is<Command> + Is<Refresh>,
     OM: Is<RawConsoleOutput>,
 {
     fn handle_message(
         &mut self,
-        state: &MACState,
+        state: &MonitorState,
         message: &IM,
     ) -> Option<event_loop::Handled<OM>> {
         let port = state.settings.rcon_port();
@@ -326,12 +326,12 @@ where
 }
 
 pub struct DumbAutoKick;
-impl<IM, OM> MessageHandler<MACState, IM, OM> for DumbAutoKick
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for DumbAutoKick
 where
     IM: Is<Refresh>,
     OM: Is<Command>,
 {
-    fn handle_message(&mut self, state: &MACState, message: &IM) -> Option<Handled<OM>> {
+    fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         let _ = try_get(message)?;
         if !state.settings.autokick_bots() {
             return None;

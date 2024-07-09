@@ -5,17 +5,17 @@ use serde::{Deserialize, Serialize};
 use steamid_ng::SteamID;
 use tokio::sync::mpsc::Receiver;
 
-use crate::{player_records::Verdict, settings::FriendsAPIUsage, state::MACState};
+use crate::{player_records::Verdict, settings::FriendsAPIUsage, state::MonitorState};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Refresh;
-impl Message<MACState> for Refresh {
-    fn update_state(self, state: &mut MACState) {
+impl Message<MonitorState> for Refresh {
+    fn update_state(self, state: &mut MonitorState) {
         state.players.refresh();
     }
 
     #[allow(unused_variables)]
-    fn preprocess(&mut self, state: &MACState) {}
+    fn preprocess(&mut self, state: &MonitorState) {}
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -28,8 +28,8 @@ pub struct UserUpdate {
 
 #[derive(Debug, Clone)]
 pub struct UserUpdates(pub HashMap<SteamID, UserUpdate>);
-impl Message<MACState> for UserUpdates {
-    fn update_state(self, state: &mut MACState) {
+impl Message<MonitorState> for UserUpdates {
+    fn update_state(self, state: &mut MonitorState) {
         for (k, v) in self.0 {
             let name = state.players.get_name(k).map(ToOwned::to_owned);
 
@@ -99,8 +99,8 @@ pub struct Preferences {
     pub external: Option<serde_json::Value>,
 }
 
-impl Message<MACState> for Preferences {
-    fn update_state(self, state: &mut MACState) {
+impl Message<MonitorState> for Preferences {
+    fn update_state(self, state: &mut MonitorState) {
         if let Some(internal) = self.internal {
             if let Some(tf2_dir) = internal.tf2_directory {
                 let path: PathBuf = tf2_dir.into();

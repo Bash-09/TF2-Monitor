@@ -32,7 +32,7 @@ use crate::{
     masterbase::{DemoSession, ReportReason},
     new_players::NewPlayers,
     settings::Settings,
-    state::MACState,
+    state::MonitorState,
 };
 
 #[allow(clippy::module_name_repetitions)]
@@ -503,7 +503,7 @@ impl DemoManager {
 
     fn handle_demo_bytes<M: Is<DemoMessage>>(
         &mut self,
-        state: &MACState,
+        state: &MonitorState,
         msg: &DemoBytes,
     ) -> Option<Handled<M>> {
         tracing::debug!("Got {} bytes for demo {:?}", msg.bytes.len(), msg.file_path);
@@ -589,12 +589,12 @@ impl Default for DemoManager {
     }
 }
 
-impl<IM, OM> MessageHandler<MACState, IM, OM> for DemoManager
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for DemoManager
 where
     IM: Is<DemoBytes> + Is<NewPlayers> + Is<UserUpdates>,
     OM: Is<DemoMessage>,
 {
-    fn handle_message(&mut self, state: &MACState, message: &IM) -> Option<Handled<OM>> {
+    fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         // Report newly connecting bots
         if let Some(players) = try_get::<NewPlayers>(message) {
             return self.report_players(
@@ -815,7 +815,7 @@ impl PrintVotes {
         &self,
         event: &VoteCastEvent,
         steamid: &Option<SteamID>,
-        state: &MACState,
+        state: &MonitorState,
     ) -> Option<String> {
         let name = steamid
             .as_ref()
@@ -837,12 +837,12 @@ impl Default for PrintVotes {
     }
 }
 
-impl<IM, OM> MessageHandler<MACState, IM, OM> for PrintVotes
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for PrintVotes
 where
     IM: Is<DemoMessage>,
 {
     #[allow(clippy::cognitive_complexity)]
-    fn handle_message(&mut self, state: &MACState, message: &IM) -> Option<Handled<OM>> {
+    fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         let msg = try_get(message)?;
 
         match &msg.event {

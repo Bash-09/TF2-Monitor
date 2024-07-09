@@ -18,7 +18,7 @@ use player_records::PlayerRecords;
 use reqwest::StatusCode;
 use server::Server;
 use settings::Settings;
-use state::MACState;
+use state::MonitorState;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     filter::Directive, fmt::writer::MakeWriterExt, layer::SubscriberExt, util::SubscriberInitExt,
@@ -59,7 +59,7 @@ use steam_api::{
 use web::{WebAPIHandler, WebRequest};
 
 define_events!(
-    MACState,
+    MonitorState,
     Message {
         Refresh,
 
@@ -114,7 +114,7 @@ fn main() {
 
     let players = Players::new(playerlist, settings.steam_user());
 
-    let mut state = MACState {
+    let mut state = MonitorState {
         server: Server::new(),
         settings,
         players,
@@ -213,7 +213,7 @@ fn main() {
                 PathBuf::from(state.settings.tf2_directory()).join("tf/console.log");
             let console_log = Box::new(ConsoleLog::new(log_file_path).await);
 
-            let mut event_loop: EventLoop<MACState, Message, Handler> = EventLoop::new()
+            let mut event_loop: EventLoop<MonitorState, Message, Handler> = EventLoop::new()
                 .add_source(console_log)
                 .add_source(emit_on_timer(Duration::from_secs(3), || Refresh).await)
                 .add_source(emit_on_timer(Duration::from_millis(500), || ProfileLookupBatchTick).await)

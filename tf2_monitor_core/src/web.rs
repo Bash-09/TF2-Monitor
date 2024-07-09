@@ -31,7 +31,7 @@ use crate::{
     events::{InternalPreferences, Preferences, UserUpdate, UserUpdates},
     player::{serialize_steamid_as_string, Friend, FriendInfo, Player, Players, SteamInfo},
     server::Gamemode,
-    state::MACState,
+    state::MonitorState,
     steam_api::{request_steam_info, ProfileLookupResult},
 };
 const HEADERS: [(header::HeaderName, &str); 2] = [
@@ -75,7 +75,7 @@ pub struct WebAPIHandler {
     post_user_queue: Vec<PostUserRequest>,
 }
 
-impl<IM, OM> MessageHandler<MACState, IM, OM> for WebAPIHandler
+impl<IM, OM> MessageHandler<MonitorState, IM, OM> for WebAPIHandler
 where
     IM: Is<WebRequest> + Is<ProfileLookupResult>,
     OM: Is<Command> + Is<Preferences> + Is<UserUpdates> + Is<ProfileLookupResult>,
@@ -83,7 +83,7 @@ where
     #[allow(clippy::cognitive_complexity)]
     fn handle_message(
         &mut self,
-        state: &MACState,
+        state: &MonitorState,
         message: &IM,
     ) -> Option<event_loop::Handled<OM>> {
         fn send(tx: &UnboundedSender<String>, payload: String) {
@@ -146,7 +146,7 @@ impl WebAPIHandler {
 
     fn handle_post_user_request<OM: Is<ProfileLookupResult>>(
         &mut self,
-        state: &MACState,
+        state: &MonitorState,
         users: &UserPostRequest,
         send: UnboundedSender<String>,
     ) -> Option<Handled<OM>> {
@@ -203,7 +203,7 @@ impl WebAPIHandler {
         out
     }
 
-    fn handle_profile_lookup(&mut self, state: &MACState, result: &ProfileLookupResult) {
+    fn handle_profile_lookup(&mut self, state: &MonitorState, result: &ProfileLookupResult) {
         let accounts = match &result.0 {
             Err(e) => {
                 tracing::error!("Failed to lookup steam profiles: {e:?}");
@@ -243,7 +243,7 @@ impl WebAPIHandler {
         self.send_waiting_post_user_responses(state);
     }
 
-    fn send_waiting_post_user_responses(&mut self, state: &MACState) {
+    fn send_waiting_post_user_responses(&mut self, state: &MonitorState) {
         self.post_user_queue
             .iter()
             .filter(|req| req.waiting_users.is_empty())
@@ -477,7 +477,7 @@ async fn get_game(State(state): State<WebState>) -> impl IntoResponse {
     )
 }
 
-fn get_game_response(state: &MACState) -> String {
+fn get_game_response(state: &MonitorState) -> String {
     #[derive(Serialize)]
     #[allow(non_snake_case)]
     struct Game<'a> {
@@ -552,7 +552,7 @@ async fn get_prefs(State(state): State<WebState>) -> impl IntoResponse {
     )
 }
 
-fn get_prefs_response(state: &MACState) -> String {
+fn get_prefs_response(state: &MonitorState) -> String {
     let settings = &state.settings;
     let prefs = Preferences {
         internal: Some(InternalPreferences {
@@ -608,7 +608,7 @@ async fn get_history(State(state): State<WebState>, page: Query<Pagination>) -> 
     )
 }
 
-fn get_history_response(state: &MACState, page: &Pagination) -> String {
+fn get_history_response(state: &MonitorState, page: &Pagination) -> String {
     // let hVecDeque<SteamID> = &server.players().history;
     let history: Vec<Player> = state
         .players
@@ -656,7 +656,7 @@ struct PlayerRecordResponse<'a> {
     created: DateTime<Utc>,
 }
 
-fn get_playerlist_response(state: &MACState) -> String {
+fn get_playerlist_response(state: &MonitorState) -> String {
     let records = &state.players.records.records;
 
     let records_mapped: Vec<PlayerRecordResponse> = records
@@ -698,7 +698,7 @@ async fn get_chat(State(state): State<WebState>) -> impl IntoResponse {
     )
 }
 
-fn get_chat_response(state: &MACState) -> String {
+fn get_chat_response(state: &MonitorState) -> String {
     serde_json::to_string(state.server.chat_history()).expect("Epic serialization fail")
 }
 
@@ -716,7 +716,7 @@ async fn get_killfeed(State(state): State<WebState>) -> impl IntoResponse {
     )
 }
 
-fn get_killfeed_response(state: &MACState) -> String {
+fn get_killfeed_response(state: &MonitorState) -> String {
     serde_json::to_string(state.server.kill_history()).expect("Epic serialization fail")
 }
 
