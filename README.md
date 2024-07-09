@@ -4,7 +4,7 @@ A successor to my previous project [TF2 Bot Kicker GUI](https://github.com/Bash-
 
 TF2 Monitor does not have quite the same goals as those previous projects, and while it does have a feature to automatically call votekicks on accounts marked as Bots, the purpose is not just for the automation of removing bad actors from the game. Instead, it is simply a desktop app designed to visualise information about the TF2 matches you are in and record some data on players of interest.
 
-If you'd like to try it out yourself, check out the **Setup** section below.
+If you'd like to try it out yourself, grab the app from the [releases](https://github.com/Bash-09/TF2-Monitor/releases) and check out the **Setup** section below.
 
 ![image](https://github.com/Bash-09/MAC-Desktop/assets/47521168/cda83c78-e1a4-4a81-b54f-d90ac50cfda6)
 
@@ -33,7 +33,7 @@ If you'd like to try it out yourself, check out the **Setup** section below.
 ![image](https://github.com/Bash-09/MAC-Desktop/assets/47521168/12fc2fb6-ada5-4fa4-bdbf-28d52b6f4d08)
 
 # Setup
-1. Download one of the releases or build the app yourself.
+1. Download one of the [releases](https://github.com/Bash-09/TF2-Monitor/releases) or build the app yourself.
 2. Add `-usercon -condebug -conclearlog -g15` to your TF2 launch options (Right click Team Fortress 2 in your Steam library -> Properties -> Paste into the "Launch Options" input field)
 3. Add the following to your `autoexec.cfg` file (you may need to [create your autoexec](https://steamcommunity.com/sharedfiles/filedetails/?id=3112357964) in the first place)
   - If you use mastercomfig, you will need to place your autoexec file inside the `overrides` folder inside your `cfg` folder (if `overrides` doesn't exist, just create it)
