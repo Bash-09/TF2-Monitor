@@ -92,3 +92,5 @@ Interaction with TF2 happens via [RCON](https://developer.valvesoftware.com/wiki
 # Building
 Building requires [Rust to be installed](https://www.rust-lang.org/tools/install), then simply run `cargo run --release` from inside the repository (Some dependencies may need to be installed on Linux).
 
+On some platforms you may need to instll some additional dependencies, e.g. on Ubuntu, you will have to install `libssl-dev`.
+
