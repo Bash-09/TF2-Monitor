@@ -27,7 +27,8 @@ If you'd like to try it out yourself, check out the **Setup** section below.
 - View the chat and killfeed history of the match
   - Click on the player's name to view more about their account!
 - Review the all the players who currently have any information recorded
-  - Filtering options such as whitelisting specific verdicts, or searching for a steamid, name, or note attached to a player.
+  - Filtering options such as whitelisting specific verdicts, or searching for a steamid, name, or note attached to a player
+- Compatible with the [MAC Client](https://github.com/MegaAntiCheat/client-backend), allowing you to contribute to demo collection using this client
 
 ![image](https://github.com/Bash-09/MAC-Desktop/assets/47521168/12fc2fb6-ada5-4fa4-bdbf-28d52b6f4d08)
 
