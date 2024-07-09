@@ -1,10 +1,10 @@
-use client_backend::{
-    player::{GameInfo, Team},
-    steamid_ng::SteamID,
-};
 use iced::{
     widget::{column, row, text, Scrollable, Space},
     Color, Length,
+};
+use tf2_monitor_core::{
+    player::{GameInfo, Team},
+    steamid_ng::SteamID,
 };
 
 use super::player;

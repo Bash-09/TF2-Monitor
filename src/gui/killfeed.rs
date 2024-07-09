@@ -1,8 +1,8 @@
-use client_backend::player::Team;
 use iced::{
     widget::{self, scrollable::Id, Container, Scrollable},
     Alignment, Length,
 };
+use tf2_monitor_core::player::Team;
 
 use crate::{App, IcedElement, Message};
 

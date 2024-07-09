@@ -1,13 +1,13 @@
 use chrono::{DateTime, Datelike, Utc};
-use client_backend::{
-    player::{GameInfo, PlayerState, ProfileVisibility, Team},
-    player_records::PlayerRecord,
-    steamid_ng::SteamID,
-};
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{self, column, Button, Image, Scrollable, Space, TextInput},
     Alignment, Length,
+};
+use tf2_monitor_core::{
+    player::{GameInfo, PlayerState, ProfileVisibility, Team},
+    player_records::PlayerRecord,
+    steamid_ng::SteamID,
 };
 
 use super::{

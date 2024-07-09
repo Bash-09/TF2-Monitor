@@ -1,7 +1,4 @@
-use iced::{
-    alignment::{Horizontal, Vertical},
-    Font,
-};
+use iced::{alignment::Horizontal, Font};
 
 pub const SHIELD: char = '\u{f132}';
 pub const HIDDEN: char = '\u{f21b}';

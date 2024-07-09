@@ -9,7 +9,7 @@ use std::{
 
 use bytes::Bytes;
 use clap::Parser;
-use client_backend::{
+use tf2_monitor_core::{
     args::Args,
     console::ConsoleLog,
     demo::{DemoWatcher, PrintVotes},
@@ -19,7 +19,7 @@ use client_backend::{
     player_records::{PlayerRecords, Verdict},
     server::Server,
     settings::Settings,
-    state::MACState,
+    state::MonitorState,
     steamid_ng::SteamID,
 };
 use gui::{chat, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
@@ -44,7 +44,7 @@ pub mod gui;
 pub mod settings;
 mod tracing_setup;
 
-use client_backend::{
+use tf2_monitor_core::{
     command_manager::{Command, CommandManager, DumbAutoKick},
     console::{ConsoleOutput, ConsoleParser, RawConsoleOutput},
     demo::{DemoBytes, DemoManager, DemoMessage},
@@ -57,7 +57,7 @@ use client_backend::{
 };
 
 define_events!(
-    MACState,
+    MonitorState,
     MACMessage {
         Refresh,
 
@@ -103,16 +103,16 @@ impl Clone for MACMessage {
 }
 
 pub struct Client {
-    pub mac: MACState,
-    pub mac_event_handler: EventLoop<MACState, MACMessage, MACHandler>,
+    pub mac: MonitorState,
+    pub mac_event_handler: EventLoop<MonitorState, MACMessage, MACHandler>,
 }
 
 type IcedElement<'a> = iced::Element<'a, Message, iced::Theme, iced::Renderer>;
 type IcedContainer<'a> = iced::widget::Container<'a, Message, iced::Theme, iced::Renderer>;
 
 pub struct App {
-    mac: MACState,
-    event_loop: EventLoop<MACState, MACMessage, MACHandler>,
+    mac: MonitorState,
+    event_loop: EventLoop<MonitorState, MACMessage, MACHandler>,
     settings: AppSettings,
 
     // UI State
@@ -153,6 +153,7 @@ pub enum Message {
     ChangeNotes(SteamID, String),
     Open(String),
     MAC(MACMessage),
+    ToggleMACEnabled(bool),
 
     /// Which page of records to display
     SetRecordPage(usize),
@@ -171,43 +172,16 @@ impl Application for App {
     type Message = Message;
     type Theme = iced::Theme;
     type Flags = (
-        MACState,
-        EventLoop<MACState, MACMessage, MACHandler>,
+        MonitorState,
+        EventLoop<MonitorState, MACMessage, MACHandler>,
         AppSettings,
     );
 
-    fn new((mac, event_loop, settings): Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        let command = if mac.settings.upload_demos {
-            let host = mac.settings.masterbase_host().to_string();
-            let key = mac.settings.masterbase_key().to_string();
-            let http = mac.settings.use_masterbase_http();
-            iced::Command::perform(
-                async move {
-                    match masterbase::force_close_session(&host, &key, http).await {
-                        // Successfully closed existing session
-                        Ok(r) if r.status().is_success() => tracing::warn!(
-                            "User was previously in a Masterbase session that has now been closed."
-                        ),
-                        // Server error
-                        Ok(r) if r.status().is_server_error() => tracing::error!(
-                            "Server error when trying to close previous Masterbase sessions: Status code {}",
-                            r.status()
-                        ),
-                        // Not authorized, invalid key
-                        Ok(r) if r.status() == StatusCode::UNAUTHORIZED => {
-                            tracing::warn!("Your Masterbase key is not valid. Please provision a new one at https://megaanticheat.com/provision");
-                        }
-                        // Forbidden, no session was open
-                        Ok(r) if r.status() == StatusCode::FORBIDDEN => {
-                            tracing::info!("Successfully authenticated with the Masterbase.");
-                        }
-                        // Remaining responses will be client failures
-                        Ok(r) => tracing::info!("Client error when trying to contact masterbase: Status code {}", r.status()),
-                        Err(e) => tracing::error!("Couldn't reach Masterbase: {e}"),
-                    }
-                },
-                |()| Message::None,
-            )
+    fn new((mut mac, event_loop, settings): Self::Flags) -> (Self, iced::Command<Self::Message>) {
+
+        mac.settings.upload_demos = settings.enable_mac_integration;
+        let command = if settings.enable_mac_integration {
+            verify_masterbase_connection(&mac.settings)
         } else {
             iced::Command::none()
         };
@@ -244,7 +218,7 @@ impl Application for App {
     }
 
     fn title(&self) -> String {
-        String::from("Bash Client")
+        String::from("Bash's TF2 Monitor")
     }
 
     fn theme(&self) -> iced::Theme {
@@ -388,6 +362,13 @@ impl Application for App {
             Message::ProfileLookupRequest(s) => {
                 return self.request_profile_lookup(vec![s]);
             }
+            Message::ToggleMACEnabled(enabled) => {
+                self.settings.enable_mac_integration = enabled;
+                self.mac.settings.upload_demos = enabled;
+                if enabled {
+                    return verify_masterbase_connection(&self.mac.settings);
+                }
+            },
         };
 
         iced::Command::none()
@@ -679,7 +660,7 @@ fn main() {
 
     let players = Players::new(playerlist, settings.steam_user());
 
-    let mac = MACState {
+    let mac = MonitorState {
         server: Server::new(),
         settings,
         players,
@@ -719,4 +700,37 @@ impl std::fmt::Debug for MACMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "MACMessage")
     }
+}
+
+fn verify_masterbase_connection(settings: &Settings) -> iced::Command<Message> {
+    let host = settings.masterbase_host().to_string();
+    let key = settings.masterbase_key().to_string();
+    let http = settings.use_masterbase_http();
+    iced::Command::perform(
+        async move {
+            match masterbase::force_close_session(&host, &key, http).await {
+                // Successfully closed existing session
+                Ok(r) if r.status().is_success() => tracing::warn!(
+                    "User was previously in a Masterbase session that has now been closed."
+                ),
+                // Server error
+                Ok(r) if r.status().is_server_error() => tracing::error!(
+                    "Server error when trying to close previous Masterbase sessions: Status code {}",
+                    r.status()
+                ),
+                // Not authorized, invalid key
+                Ok(r) if r.status() == StatusCode::UNAUTHORIZED => {
+                    tracing::warn!("Your Masterbase key is not valid. Please provision a new one at https://megaanticheat.com/provision");
+                }
+                // Forbidden, no session was open
+                Ok(r) if r.status() == StatusCode::FORBIDDEN => {
+                    tracing::info!("Successfully authenticated with the Masterbase.");
+                }
+                // Remaining responses will be client failures
+                Ok(r) => tracing::info!("Client error when trying to contact masterbase: Status code {}", r.status()),
+                Err(e) => tracing::error!("Couldn't reach Masterbase: {e}"),
+            }
+        },
+        |()| Message::None,
+    )
 }

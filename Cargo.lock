@@ -670,51 +670,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
 
 [[package]]
-name = "client-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "atomic-write-file",
- "axum",
- "bitbuffer",
- "chrono",
- "clap",
- "clap_lex 0.5.1",
- "directories-next",
- "embed-resource",
- "event_loop",
- "futures",
- "ico",
- "include_dir",
- "keyvalues-parser 0.1.0",
- "keyvalues-serde 0.1.0",
- "notify",
- "open",
- "pot",
- "rcon",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "serde_yaml",
- "steamid-ng",
- "steamlocate",
- "substring",
- "tappet",
- "tf-demo-parser",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite",
- "tower-http",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "clipboard-win"
 version = "5.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1294,6 +1249,7 @@ dependencies = [
 [[package]]
 name = "event_loop"
 version = "0.1.0"
+source = "git+https://github.com/Bash-09/TF2-Monitor-Core#c8be157795e54789a890aacce5af625e08354dc9"
 dependencies = [
  "futures",
  "tokio",
@@ -2563,30 +2519,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3262e75e648fce39813cb56ac41f3c3e3f65217ebf3844d818d1f9398cfb0dc"
 dependencies = [
  "hashbrown",
-]
-
-[[package]]
-name = "mac_desktop"
-version = "0.1.0"
-dependencies = [
- "badge",
- "bytes",
- "card",
- "chrono",
- "clap",
- "client-backend",
- "iced",
- "image 0.25.1",
- "open",
- "reqwest",
- "serde",
- "serde_json",
- "split",
- "tabs",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -4833,6 +4765,76 @@ dependencies = [
  "serde_repr",
  "snap",
  "steamid-ng",
+]
+
+[[package]]
+name = "tf2_monitor"
+version = "0.1.0"
+dependencies = [
+ "badge",
+ "bytes",
+ "card",
+ "chrono",
+ "clap",
+ "iced",
+ "image 0.25.1",
+ "open",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "split",
+ "tabs",
+ "tf2_monitor_core",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "tf2_monitor_core"
+version = "0.1.0"
+source = "git+https://github.com/Bash-09/TF2-Monitor-Core#c8be157795e54789a890aacce5af625e08354dc9"
+dependencies = [
+ "anyhow",
+ "atomic-write-file",
+ "axum",
+ "bitbuffer",
+ "chrono",
+ "clap",
+ "clap_lex 0.5.1",
+ "directories-next",
+ "embed-resource",
+ "event_loop",
+ "futures",
+ "ico",
+ "include_dir",
+ "keyvalues-parser 0.1.0",
+ "keyvalues-serde 0.1.0",
+ "notify",
+ "open",
+ "pot",
+ "rcon",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "steamid-ng",
+ "steamlocate",
+ "substring",
+ "tappet",
+ "tf-demo-parser",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+ "uuid",
 ]
 
 [[package]]

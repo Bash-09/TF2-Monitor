@@ -1,5 +1,5 @@
-use client_backend::player_records::Verdict;
 use iced::{widget::pick_list, Border};
+use tf2_monitor_core::player_records::Verdict;
 
 use super::colours;
 

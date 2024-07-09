@@ -11,7 +11,7 @@ bytes = "1.5.0"
 card = "0.1.0"
 chrono = "0.4.38"
 clap = "4.4.8"
-client-backend = { path = "../client-backend" }
+tf2_monitor_core = { git = "https://github.com/Bash-09/TF2-Monitor-Core" }
 iced = { version = "0.12.1", features = ["tokio", "image"] }
 image = "0.25.1"
 open = "5.0.1"

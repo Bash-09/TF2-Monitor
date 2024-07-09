@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-use client_backend::{player_records::Verdict, steamid_ng::SteamID};
 use iced::{
     theme,
     widget::{self, column, row, Button, PickList, Rule, Tooltip},
     Color, Length,
 };
+use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
 
 use crate::{App, IcedContainer, IcedElement, Message};
 
