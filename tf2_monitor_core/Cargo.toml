@@ -3,7 +3,6 @@ workspace = { members = ["event_loop"] }
 name = "tf2_monitor_core"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
 
 [[bin]]
 name = "tf2_monitor_core"
