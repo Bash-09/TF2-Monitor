@@ -1410,7 +1410,7 @@ dependencies = [
 [[package]]
 name = "event_loop"
 version = "0.1.0"
-source = "git+https://github.com/Bash-09/TF2-Monitor-Core#fcfb017fd3584fec85605927b93bd1b76a1fcd48"
+source = "git+https://github.com/Bash-09/TF2-Monitor-Core#7855d624ac31fc3a810ade664e4a2cb2ec1798a7"
 dependencies = [
  "futures",
  "tokio",
@@ -4979,7 +4979,7 @@ dependencies = [
 [[package]]
 name = "tf2_monitor_core"
 version = "0.1.0"
-source = "git+https://github.com/Bash-09/TF2-Monitor-Core#fcfb017fd3584fec85605927b93bd1b76a1fcd48"
+source = "git+https://github.com/Bash-09/TF2-Monitor-Core#7855d624ac31fc3a810ade664e4a2cb2ec1798a7"
 dependencies = [
  "anyhow",
  "atomic-write-file",

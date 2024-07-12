@@ -8,7 +8,7 @@ use bytes::Bytes;
 use replay::{ReplayMessage, ReplayState};
 use tf2_monitor_core::{
     console::ConsoleLog,
-    demo::{DemoWatcher, PrintVotes},
+    demo::DemoWatcher,
     event_loop::{self, define_events, EventLoop, MessageSource},
     masterbase,
     player::Players,
@@ -95,7 +95,6 @@ define_events!(
 
         DemoManager,
         DumbAutoKick,
-        PrintVotes,
     },
 );
 
@@ -748,7 +747,6 @@ fn main() {
         .add_handler(ExtractNewPlayers)
         .add_handler(LookupProfiles::new())
         .add_handler(DemoManager::new())
-        .add_handler(PrintVotes::new())
         .add_handler(LookupFriends::new());
 
     let mut iced_settings = iced::Settings::with_flags((core, event_loop, app_settings.clone()));

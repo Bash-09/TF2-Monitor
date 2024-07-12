@@ -362,6 +362,7 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
         .into()
 }
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn badges<'a>(
     state: &'a App,
@@ -469,6 +470,30 @@ pub fn badges<'a>(
         .and_then(|v| v.as_str())
     {
         contents = contents.push(tooltip(icon(icons::NOTES), widget::text(notes)));
+    }
+
+    // Vote
+    if let Some(vote) = state.mac.server.vote_history().last() {
+        if let Some(vote_cast) = vote
+            .votes
+            .iter()
+            .find(|v| v.steamid.is_some_and(|s| s == player))
+        {
+            let option = vote.options.get(vote_cast.option as usize);
+
+            if option.is_some_and(|o| o == "Yes") {
+                contents = contents.push(tooltip(
+                    icon(icons::TICK).style(colours::green()),
+                    "Voted Yes",
+                ));
+            }
+            if option.is_some_and(|o| o == "No") {
+                contents = contents.push(tooltip(
+                    icon(icons::CROSS).style(colours::red()),
+                    "Voted No",
+                ));
+            }
+        }
     }
 
     contents
