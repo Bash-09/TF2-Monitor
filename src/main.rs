@@ -62,7 +62,7 @@ pub const NOTES_KEY: &str = "playerNote";
 
 define_events!(
     MonitorState,
-    MACMessage {
+    MonitorMessage {
         Refresh,
 
         Command,
@@ -83,7 +83,7 @@ define_events!(
         DemoBytes,
         DemoMessage,
     },
-    MACHandler {
+    MonitorHandler {
         CommandManager,
 
         ConsoleParser,
@@ -99,7 +99,7 @@ define_events!(
     },
 );
 
-impl Clone for MACMessage {
+impl Clone for MonitorMessage {
     fn clone(&self) -> Self {
         tracing::error!("Shouldn't be cloning MACMessages!");
         Self::None
@@ -108,7 +108,7 @@ impl Clone for MACMessage {
 
 pub struct Client {
     pub mac: MonitorState,
-    pub mac_event_handler: EventLoop<MonitorState, MACMessage, MACHandler>,
+    pub mac_event_handler: EventLoop<MonitorState, MonitorMessage, MonitorHandler>,
 }
 
 type IcedElement<'a> = iced::Element<'a, Message, iced::Theme, iced::Renderer>;
@@ -116,7 +116,7 @@ type IcedContainer<'a> = iced::widget::Container<'a, Message, iced::Theme, iced:
 
 pub struct App {
     mac: MonitorState,
-    event_loop: EventLoop<MonitorState, MACMessage, MACHandler>,
+    event_loop: EventLoop<MonitorState, MonitorMessage, MonitorHandler>,
     settings: AppSettings,
 
     // UI State
@@ -163,7 +163,7 @@ pub enum Message {
     ChangeVerdict(SteamID, Verdict),
     ChangeNotes(SteamID, String),
     Open(String),
-    MAC(MACMessage),
+    MAC(MonitorMessage),
     ToggleMACEnabled(bool),
     BrowseTF2Dir,
 
@@ -187,7 +187,7 @@ impl Application for App {
     type Theme = iced::Theme;
     type Flags = (
         MonitorState,
-        EventLoop<MonitorState, MACMessage, MACHandler>,
+        EventLoop<MonitorState, MonitorMessage, MonitorHandler>,
         AppSettings,
     );
 
@@ -260,9 +260,9 @@ impl Application for App {
         iced::Subscription::batch([
             // iced::subscription::events().map(Message::EventOccurred),
             iced::time::every(Duration::from_secs(2))
-                .map(|_| Message::MAC(MACMessage::Refresh(Refresh))),
+                .map(|_| Message::MAC(MonitorMessage::Refresh(Refresh))),
             iced::time::every(Duration::from_millis(500))
-                .map(|_| Message::MAC(MACMessage::ProfileLookupBatchTick(ProfileLookupBatchTick))),
+                .map(|_| Message::MAC(MonitorMessage::ProfileLookupBatchTick(ProfileLookupBatchTick))),
             iced::subscription::channel(TypeId::of::<ConsoleLog>(), 100, |mut output| async move {
                 let mut console_log = if let Some(path) = log_file_path {
                     ConsoleLog::new(path)
@@ -274,7 +274,7 @@ impl Application for App {
                     tokio::select! {
                         Some(line) = console_log.recv.recv() => {
                             output
-                                .send(Message::MAC(MACMessage::RawConsoleOutput(
+                                .send(Message::MAC(MonitorMessage::RawConsoleOutput(
                                     RawConsoleOutput(line),
                                 )))
                                 .await.ok();
@@ -515,32 +515,32 @@ impl App {
         self.records_to_display.reverse();
     }
 
-    fn handle_mac_message(&mut self, message: MACMessage) -> iced::Command<Message> {
+    fn handle_mac_message(&mut self, message: MonitorMessage) -> iced::Command<Message> {
         let mut commands = Vec::new();
 
         let mut messages = vec![message];
         while let Some(m) = messages.pop() {
             // Get profile pictures
             match &m {
-                MACMessage::ProfileLookupResult(ProfileLookupResult(Ok(profiles))) => {
+                MonitorMessage::ProfileLookupResult(ProfileLookupResult(Ok(profiles))) => {
                     for (_, r) in profiles {
                         if let Ok(si) = r {
                             commands.push(self.request_pfp_lookup(&si.pfp_hash, &si.pfp_url));
                         }
                     }
                 }
-                MACMessage::NewPlayers(NewPlayers(players)) => {
+                MonitorMessage::NewPlayers(NewPlayers(players)) => {
                     for s in players {
                         commands.push(self.request_pfp_lookup_for_existing_player(*s));
                     }
                 }
-                MACMessage::ConsoleOutput(ConsoleOutput::Chat(_)) if self.snap_chat_to_bottom => {
+                MonitorMessage::ConsoleOutput(ConsoleOutput::Chat(_)) if self.snap_chat_to_bottom => {
                     commands.push(snap_to(
                         widget::scrollable::Id::new(chat::SCROLLABLE_ID),
                         RelativeOffset { x: 0.0, y: 1.0 },
                     ));
                 }
-                MACMessage::ConsoleOutput(ConsoleOutput::Kill(_)) if self.snap_kills_to_bottom => {
+                MonitorMessage::ConsoleOutput(ConsoleOutput::Kill(_)) if self.snap_kills_to_bottom => {
                     commands.push(snap_to(
                         widget::scrollable::Id::new(killfeed::SCROLLABLE_ID),
                         RelativeOffset { x: 0.0, y: 1.0 },
@@ -555,7 +555,7 @@ impl App {
                     event_loop::Action::Message(m) => messages.push(m),
                     event_loop::Action::Future(f) => {
                         commands.push(iced::Command::perform(
-                            f.map(|m| m.unwrap_or(MACMessage::None)),
+                            f.map(|m| m.unwrap_or(MonitorMessage::None)),
                             Message::MAC,
                         ));
                     }
@@ -609,14 +609,14 @@ impl App {
     fn request_profile_lookup(&mut self, accounts: Vec<SteamID>) -> iced::Command<Message> {
         let mut commands = Vec::new();
         for a in self.event_loop.handle_message(
-            MACMessage::ProfileLookupRequest(ProfileLookupRequest::Multiple(accounts)),
+            MonitorMessage::ProfileLookupRequest(ProfileLookupRequest::Multiple(accounts)),
             &mut self.mac,
         ) {
             match a {
                 event_loop::Action::Message(_) => {}
                 event_loop::Action::Future(f) => {
                     commands.push(iced::Command::perform(
-                        f.map(|m| m.unwrap_or(MACMessage::None)),
+                        f.map(|m| m.unwrap_or(MonitorMessage::None)),
                         Message::MAC,
                     ));
                 }
@@ -765,7 +765,7 @@ fn main() {
     App::run(iced_settings).expect("Failed to run app.");
 }
 
-impl std::fmt::Debug for MACMessage {
+impl std::fmt::Debug for MonitorMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "MACMessage")
     }

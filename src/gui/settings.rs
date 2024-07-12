@@ -7,7 +7,7 @@ use tf2_monitor_core::{
     settings::FriendsAPIUsage,
 };
 
-use crate::{gui::tooltip, App, IcedElement, MACMessage, Message};
+use crate::{gui::tooltip, App, IcedElement, Message, MonitorMessage};
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
@@ -43,7 +43,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     tooltip(widget::text("Rcon Password"), widget::text("The password used to connect to TF2 via Rcon. Set by rcon_password in your autoexec file.")),
                 ].width(HALF_WIDTH),
                 widget::text_input("Rcon password", &state.mac.settings.rcon_password).on_input(
-                    |s| Message::MAC(MACMessage::Preferences(Preferences {
+                    |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
                             tf2_directory: None,
@@ -66,7 +66,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     tooltip("Rcon port", "The port used to connect to TF2 via Rcon. Defaults to 27015, or set by -port in your launch options."),
                 ].width(HALF_WIDTH),
                 widget::text_input("Rcon port", &format!("{}", state.mac.settings.rcon_port)).on_input(
-                    |s| Message::MAC(MACMessage::Preferences(Preferences {
+                    |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
                             tf2_directory: None,
@@ -95,7 +95,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     widget::button("Get yours here").on_press(Message::Open("https://steamcommunity.com/dev/apikey".to_string())),
                 ].width(HALF_WIDTH),
                 widget::text_input("Steam API key", &state.mac.settings.steam_api_key).on_input(
-                    |s| Message::MAC(MACMessage::Preferences(Preferences {
+                    |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
                             tf2_directory: None,
@@ -117,7 +117,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                 widget::row![tooltip("Friend Lookups", "Which accounts will have their friend lists looked up via the Steam Web API. Friend lookups can only be requested on an individual account basis and may use up a larger number of API requests.")].width(HALF_WIDTH),
                 widget::row![
                 widget::PickList::new(FRIENDS_API_USAGE_OPTIONS, Some(state.mac.settings.friends_api_usage), |v| {
-                    Message::MAC(MACMessage::Preferences(Preferences {
+                    Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: Some(v),
                             tf2_directory: None,
@@ -151,7 +151,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     widget::button("Get yours here").on_press(Message::Open(format!("{}://{}/provision", if state.mac.settings.masterbase_http {"http"} else {"https"}, state.mac.settings.masterbase_host ))),
                 ].width(HALF_WIDTH),
                 widget::text_input("Masterbase key", &state.mac.settings.masterbase_key).on_input(
-                    |s| Message::MAC(MACMessage::Preferences(Preferences {
+                    |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
                             tf2_directory: None,
@@ -174,7 +174,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     tooltip("Masterbase host", "The address to conteact the remote Masterbase at. You most likely will not need to change this."),
                 ].width(HALF_WIDTH),
                 widget::text_input("Masterbase host", &state.mac.settings.masterbase_host).on_input(
-                    |s| Message::MAC(MACMessage::Preferences(Preferences {
+                    |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
                             tf2_directory: None,

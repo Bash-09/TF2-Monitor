@@ -14,6 +14,8 @@ pub const BLOCK: char = '\u{e808}';
 pub const HOURGLASS: char = '\u{f252}';
 pub const DISCONNECT: char = '\u{f1e6}';
 pub const JOINING: char = '\u{e809}';
+pub const TICK: char = '\u{f14a}';
+pub const CROSS: char = '\u{e80a}';
 
 // Generated using https://fontello.com
 pub const FONT_FILE: &[u8] = include_bytes!("../../icons.ttf");
