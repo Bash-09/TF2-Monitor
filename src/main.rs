@@ -1,16 +1,11 @@
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::redundant_pub_crate)]
 
 use std::{
-    any::TypeId,
-    collections::{HashMap, HashSet},
-    io::Cursor,
-    time::Duration,
+    any::TypeId, cell::RefCell, collections::{HashMap, HashSet}, io::Cursor, path::PathBuf, time::Duration
 };
-
 use bytes::Bytes;
-use clap::Parser;
 use tf2_monitor_core::{
-    args::Args,
     console::ConsoleLog,
     demo::{DemoWatcher, PrintVotes},
     event_loop::{self, define_events, EventLoop, MessageSource},
@@ -18,7 +13,7 @@ use tf2_monitor_core::{
     player::Players,
     player_records::{PlayerRecords, Verdict},
     server::Server,
-    settings::Settings,
+    settings::{AppDetails, Settings},
     state::MonitorState,
     steamid_ng::SteamID,
 };
@@ -36,13 +31,7 @@ use image::{io::Reader, EncodableLayout, ImageBuffer};
 use reqwest::StatusCode;
 use serde_json::Map;
 use settings::{AppSettings, SETTINGS_IDENTIFIER};
-
-pub const ALIAS_KEY: &str = "alias";
-pub const NOTES_KEY: &str = "playerNote";
-
-pub mod gui;
-pub mod settings;
-mod tracing_setup;
+use tokio::sync::broadcast::{Receiver, Sender};
 
 use tf2_monitor_core::{
     command_manager::{Command, CommandManager, DumbAutoKick},
@@ -55,6 +44,19 @@ use tf2_monitor_core::{
         ProfileLookupRequest, ProfileLookupResult,
     },
 };
+
+pub mod gui;
+pub mod settings;
+mod tracing_setup;
+
+pub const APP: AppDetails<'static> = AppDetails {
+    qualifier: "com.megascatterbomb",
+    organization: "MAC",
+    application: "MACClient",
+};
+
+pub const ALIAS_KEY: &str = "alias";
+pub const NOTES_KEY: &str = "playerNote";
 
 define_events!(
     MonitorState,
@@ -132,6 +134,10 @@ pub struct App {
     // (High res, Low res)
     pfp_cache: HashMap<String, (iced::widget::image::Handle, iced::widget::image::Handle)>,
     pfp_in_progess: HashSet<String>,
+
+    // Change TF2 directory
+    change_tf2_dir: Sender<PathBuf>,
+    _tf2_dir_changed: RefCell<Option<Receiver<PathBuf>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -186,6 +192,8 @@ impl Application for App {
             iced::Command::none()
         };
 
+        let (tf2_dir_tx, tf2_dir_rx) = tokio::sync::broadcast::channel(1);
+
         (
             Self {
                 mac,
@@ -212,6 +220,9 @@ impl Application for App {
 
                 pfp_cache: HashMap::new(),
                 pfp_in_progess: HashSet::new(),
+
+                change_tf2_dir: tf2_dir_tx,
+                _tf2_dir_changed: RefCell::new(Some(tf2_dir_rx)),
             },
             command,
         )
@@ -226,8 +237,15 @@ impl Application for App {
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
-        let log_file_path = self.mac.settings.tf2_directory().join("tf/console.log");
-        let demo_path = self.mac.settings.tf2_directory().join("tf");
+        let mut tf2_dir_changed_log = self.change_tf2_dir.subscribe();
+        let mut tf2_dir_changed_con = self.change_tf2_dir.subscribe();
+
+        #[allow(clippy::used_underscore_binding)]
+        let _ = self._tf2_dir_changed.replace(None);
+        
+        // TODO - Do something so I don't have to unwrap this
+        let log_file_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf/console.log"));
+        let demo_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf"));
 
         iced::Subscription::batch([
             // iced::subscription::events().map(Message::EventOccurred),
@@ -236,39 +254,53 @@ impl Application for App {
             iced::time::every(Duration::from_millis(500))
                 .map(|_| Message::MAC(MACMessage::ProfileLookupBatchTick(ProfileLookupBatchTick))),
             iced::subscription::channel(TypeId::of::<ConsoleLog>(), 100, |mut output| async move {
-                let mut console_log = ConsoleLog::new(log_file_path).await;
+                let mut console_log = if let Some(path) = log_file_path {
+                    ConsoleLog::new(path)
+                } else {
+                    ConsoleLog::new(tf2_dir_changed_log.recv().await.expect("Couldn't receive new TF2 dir"))
+                }.await;
 
                 loop {
-                    let line = console_log
-                        .recv
-                        .recv()
-                        .await
-                        .expect("No more messages coming.");
-                    let _ = output
-                        .send(Message::MAC(MACMessage::RawConsoleOutput(
-                            RawConsoleOutput(line),
-                        )))
-                        .await;
+                    tokio::select! {
+                        Some(line) = console_log.recv.recv() => {
+                            output
+                                .send(Message::MAC(MACMessage::RawConsoleOutput(
+                                    RawConsoleOutput(line),
+                                )))
+                                .await.ok();
+                        },
+                        Ok(new_tf2_dir) = tf2_dir_changed_log.recv() => {
+                            console_log = ConsoleLog::new(new_tf2_dir).await;
+                        }
+                        else => {
+                            panic!("Console watcher should have either received a new line or new TF2 dir :(");
+                        }
+                    };
+
                 }
             }),
             iced::subscription::channel(
                 TypeId::of::<DemoWatcher>(),
                 100,
                 |mut output| async move {
-                    match DemoWatcher::new(&demo_path) {
-                        Ok(mut watcher) => loop {
-                            if let Some(m) = watcher.next_message() {
-                                let _ = output.send(Message::MAC(m)).await;
-                            }
-
-                            tokio::time::sleep(Duration::from_millis(50)).await;
-                        },
-                        Err(e) => tracing::error!("Could not start demo watcher: {e:?}"),
-                    }
+                    let mut demo_watcher = demo_path.and_then(|path| DemoWatcher::new(&path).map_err(|e| {
+                        tracing::error!("Couldn't start demo watcher: {e}");
+                    }).ok());
 
                     loop {
+                        if let Some (m) = demo_watcher.as_mut().and_then(MessageSource::next_message) {
+                            output.send(Message::MAC(m)).await.ok();
+                        }
+
+                        if let Ok(Ok(new_tf2_dir)) = tokio::time::timeout(Duration::from_millis(50), tf2_dir_changed_con.recv()).await {
+                            demo_watcher = DemoWatcher::new(&new_tf2_dir).map_err(|e| {
+                                tracing::error!("Couldn't start demo watcher: {e}");
+                            }).ok();
+                        }
+
                         tokio::time::sleep(Duration::from_millis(50)).await;
                     }
+                    
                 },
             ),
         ])
@@ -344,7 +376,7 @@ impl Application for App {
                 let max_page = self.records_to_display.len() / self.records_per_page;
                 self.record_page = self.record_page.min(max_page);
             }
-            Message::SetKickBots(kick) => self.mac.settings.set_autokick_bots(kick),
+            Message::SetKickBots(kick) => self.mac.settings.autokick_bots = kick,
             Message::ScrolledChat(offset) => {
                 self.snap_chat_to_bottom = (offset.y - 1.0).abs() <= f32::EPSILON;
             }
@@ -382,7 +414,7 @@ impl Application for App {
 impl App {
     fn save_settings(&mut self) {
         let settings = &mut self.mac.settings;
-        let mut external_settings = settings.external_preferences().clone();
+        let mut external_settings = settings.external.clone();
         if !external_settings.is_object() {
             external_settings = serde_json::Value::Object(serde_json::Map::new());
         }
@@ -647,28 +679,45 @@ impl Drop for App {
 fn main() {
     let _guard = tracing_setup::init_tracing();
 
-    // Arg handling
-    let args = Args::parse();
-
     // Load Settings
-    let settings = Settings::load_or_create(&args);
+    let mut settings = Settings::load_or_create(
+        Settings::default_file_location(APP).unwrap_or_else(|e| {
+            tracing::error!("Failed to find a suitable location to store settings ({e}). Settings will be written to {}", tf2_monitor_core::settings::CONFIG_FILE_NAME);
+            tf2_monitor_core::settings::CONFIG_FILE_NAME.into()
+        }
+    )).expect("Failed to load settings. Please fix any issues mentioned and try again.");
     settings.save_ok();
 
+    if let Err(e) = settings.infer_steam_user() {
+        tracing::error!("Failed to infer steam user: {e}");
+    }
+
+    if let Err(e) = settings.infer_tf2_directory() {
+        tracing::error!("Failed to locate TF2 directory: {e}");
+    }
+
     // Playerlist
-    let mut playerlist = PlayerRecords::load_or_create(&args);
+    let mut playerlist = PlayerRecords::load_or_create(PlayerRecords::default_file_location(APP).unwrap_or_else(|e| {
+        tracing::error!("Failed to find a suitable location to store player records ({e}). Records will be written to {}", tf2_monitor_core::player_records::RECORDS_FILE_NAME);
+        tf2_monitor_core::player_records::RECORDS_FILE_NAME.into()
+    })).expect("Failed to load player records. Please fix any issues mentioned and try again.");
     playerlist.save_ok();
 
-    let players = Players::new(playerlist, settings.steam_user());
+    let players = Players::new(
+        playerlist,
+        settings.steam_user,
+        Players::default_steam_cache_path(APP).ok(),
+    );
 
-    let mac = MonitorState {
+    let core = MonitorState {
         server: Server::new(),
         settings,
         players,
     };
 
-    let app_settings: AppSettings = mac
+    let app_settings: AppSettings = core
         .settings
-        .external_preferences()
+        .external
         .get(SETTINGS_IDENTIFIER)
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
@@ -682,7 +731,7 @@ fn main() {
         .add_handler(PrintVotes::new())
         .add_handler(LookupFriends::new());
 
-    let mut iced_settings = iced::Settings::with_flags((mac, event_loop, app_settings.clone()));
+    let mut iced_settings = iced::Settings::with_flags((core, event_loop, app_settings.clone()));
     iced_settings.window.min_size = Some(iced::Size::new(600.0, 400.0));
     iced_settings.fonts.push(FONT_FILE.into());
     // iced_settings.fonts.push(&FONT_FILE);
@@ -703,9 +752,9 @@ impl std::fmt::Debug for MACMessage {
 }
 
 fn verify_masterbase_connection(settings: &Settings) -> iced::Command<Message> {
-    let host = settings.masterbase_host().to_string();
-    let key = settings.masterbase_key().to_string();
-    let http = settings.use_masterbase_http();
+    let host = settings.masterbase_host.to_string();
+    let key = settings.masterbase_key.to_string();
+    let http = settings.masterbase_http;
     iced::Command::perform(
         async move {
             match masterbase::force_close_session(&host, &key, http).await {
