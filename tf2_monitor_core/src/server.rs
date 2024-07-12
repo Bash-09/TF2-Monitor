@@ -1,8 +1,12 @@
 use serde::Serialize;
+use steamid_ng::SteamID;
+use tf_demo_parser::demo::gameevent_gen::{VoteCastEvent, VoteOptionsEvent};
 
 use crate::{
     console::ConsoleOutput,
+    demo::{DemoEvent, DemoMessage},
     io::regexes::{self, ChatMessage, PlayerKill},
+    player::Players,
 };
 
 // Server
@@ -16,6 +20,9 @@ pub struct Server {
     gamemode: Option<Gamemode>,
     chat_history: Vec<ChatMessage>,
     kill_history: Vec<PlayerKill>,
+    vote_history: Vec<VoteEvent>,
+    /// (`vote_idx`, `CastVote`)
+    shunted_vote_cast_events: Vec<(u32, CastVote)>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -24,6 +31,19 @@ pub struct Gamemode {
     #[serde(rename = "type")]
     pub game_type: String,
     pub vanilla: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct VoteEvent {
+    pub idx: u32,
+    pub options: Vec<String>,
+    pub votes: Vec<CastVote>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CastVote {
+    pub steamid: Option<SteamID>,
+    pub option: u8,
 }
 
 #[allow(dead_code)]
@@ -41,6 +61,8 @@ impl Server {
 
             chat_history: Vec::new(),
             kill_history: Vec::new(),
+            vote_history: Vec::new(),
+            shunted_vote_cast_events: Vec::new(),
         }
     }
 
@@ -85,6 +107,11 @@ impl Server {
     pub fn kill_history(&self) -> &[PlayerKill] {
         &self.kill_history
     }
+
+    #[must_use]
+    pub fn vote_history(&self) -> &[VoteEvent] {
+        &self.vote_history
+    }
 }
 
 impl Default for Server {
@@ -124,17 +151,92 @@ impl Server {
         }
     }
 
-    #[allow(clippy::unused_self)]
-    #[allow(clippy::needless_pass_by_value)]
     fn handle_chat(&mut self, chat: ChatMessage) {
         tracing::debug!("Chat: {:?}", chat);
         self.chat_history.push(chat);
     }
 
-    #[allow(clippy::unused_self)]
-    #[allow(clippy::needless_pass_by_value)]
     fn handle_kill(&mut self, kill: PlayerKill) {
         tracing::debug!("Kill: {:?}", kill);
         self.kill_history.push(kill);
+    }
+
+    pub fn handle_demo_message(&mut self, demo_message: DemoMessage, players: &Players) {
+        match demo_message.event {
+            DemoEvent::VoteOptions(options) => self.handle_vote_options(&options),
+            DemoEvent::VoteCast(cast_vote, steamid) => self.handle_vote_cast(&cast_vote, steamid),
+            DemoEvent::VoteStarted(_) | DemoEvent::LatestTick => {}
+        }
+        self.check_shunted_votes(players);
+    }
+
+    fn handle_vote_options(&mut self, options: &VoteOptionsEvent) {
+        let mut values = Vec::new();
+        tracing::info!("Vote options:");
+        for i in 0..options.count {
+            let opt = match i {
+                0 => options.option_1.to_string(),
+                1 => options.option_2.to_string(),
+                2 => options.option_3.to_string(),
+                3 => options.option_4.to_string(),
+                4 => options.option_5.to_string(),
+                _ => String::new(),
+            };
+
+            tracing::info!("\t{}", opt);
+            values.push(opt);
+        }
+
+        let vote = VoteEvent {
+            idx: options.voteidx,
+            options: values,
+            votes: Vec::new(),
+        };
+
+        self.vote_history.push(vote);
+    }
+
+    fn handle_vote_cast(&mut self, vote: &VoteCastEvent, caster: Option<SteamID>) {
+        let cast_vote = CastVote {
+            steamid: caster,
+            option: vote.vote_option,
+        };
+
+        self.shunted_vote_cast_events
+            .push((vote.voteidx, cast_vote));
+    }
+
+    fn check_shunted_votes(&mut self, players: &Players) {
+        // Replay shunted messages if we have them. This ensures that we don't print VoteCast events for Vote we haven't seen the
+        // VoteOptions event for yet. Saves
+        if self.shunted_vote_cast_events.is_empty() {
+            return;
+        }
+
+        // We need to temporarily move the event queue into a local buffer so we can immutably borrow self
+        // inside the closure. Once we are done, we move the queue back into self.shunted_vote_cast_messages
+        let mut temp = Vec::new();
+        std::mem::swap(&mut temp, &mut self.shunted_vote_cast_events);
+        temp.retain(|(idx, cast_vote)| {
+            // Reverse iterator to check most recent votes first, as there may be earlier votes with the same idx
+            let Some(vote) = self.vote_history.iter_mut().rev().find(|v| v.idx == *idx) else {
+                return true;
+            };
+
+            let name = cast_vote
+                .steamid
+                .and_then(|s| players.get_name(s))
+                .unwrap_or("Unknown player");
+            let vote_option: &str = vote
+                .options
+                .get(cast_vote.option as usize)
+                .map_or("Invalid vote option", String::as_str);
+            tracing::info!("{name} - {vote_option}");
+
+            vote.votes.push(cast_vote.clone());
+
+            false
+        });
+        std::mem::swap(&mut temp, &mut self.shunted_vote_cast_events);
     }
 }

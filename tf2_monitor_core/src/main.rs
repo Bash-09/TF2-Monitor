@@ -49,7 +49,7 @@ mod web;
 
 use command_manager::{Command, CommandManager, DumbAutoKick};
 use console::{ConsoleLog, ConsoleOutput, ConsoleParser, RawConsoleOutput};
-use demo::{DemoBytes, DemoManager, DemoMessage, DemoWatcher, PrintVotes};
+use demo::{DemoBytes, DemoManager, DemoMessage, DemoWatcher};
 use events::{Preferences, Refresh, UserUpdates};
 use new_players::{ExtractNewPlayers, NewPlayers};
 use sse_events::SseEventBroadcaster;
@@ -102,7 +102,6 @@ define_events!(
         SseEventBroadcaster,
 
         DemoManager,
-        PrintVotes,
         DumbAutoKick,
     },
 );
@@ -286,7 +285,6 @@ fn main() {
                 .add_handler(LookupFriends::new())
                 .add_handler(DumbAutoKick)
                 .add_handler(WebAPIHandler::new())
-                .add_handler(PrintVotes::new())
                 .add_handler(SseEventBroadcaster::new());
 
             if args.dont_parse_demos {
