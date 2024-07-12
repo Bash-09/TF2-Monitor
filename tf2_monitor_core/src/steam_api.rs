@@ -155,7 +155,7 @@ where
         }
 
         // Don't request anything if there's no API key
-        if state.settings.steam_api_key().is_empty() {
+        if state.settings.steam_api_key.is_empty() {
             return None;
         }
 
@@ -191,7 +191,7 @@ where
                 return Handled::none();
             }
 
-            let key = state.settings.steam_api_key().to_owned();
+            let key = state.settings.steam_api_key.clone();
             let batch: Vec<_> = self
                 .batch_buffer
                 .drain(0..BATCH_SIZE.min(self.batch_buffer.len()))
@@ -274,7 +274,7 @@ impl LookupFriends {
 
         for &p in players {
             // Lookup user regardless of policy
-            if state.settings.steam_user().is_some_and(|s| p == s) {
+            if state.settings.steam_user.is_some_and(|s| p == s) {
                 queued_friendlist_req.push(p);
                 continue;
             }
@@ -326,7 +326,7 @@ where
     OM: Is<FriendLookupResult>,
 {
     fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
-        if state.settings.steam_api_key().is_empty() {
+        if state.settings.steam_api_key.is_empty() {
             return Handled::none();
         }
 
@@ -334,8 +334,8 @@ where
             return self.handle_players(
                 state,
                 new_players,
-                state.settings.friends_api_usage(),
-                state.settings.steam_api_key(),
+                state.settings.friends_api_usage,
+                &state.settings.steam_api_key,
                 false,
             );
         }
@@ -352,8 +352,8 @@ where
                 self.handle_players::<OM>(
                     state,
                     &state.players.connected,
-                    state.settings.friends_api_usage(),
-                    state.settings.steam_api_key(),
+                    state.settings.friends_api_usage,
+                    &state.settings.steam_api_key,
                     true,
                 )
             } else {
@@ -366,7 +366,7 @@ where
 
         // Lookup any players that might need to be after a change to their verdicts
         if let Some(UserUpdates(users)) = try_get(message) {
-            let policy = state.settings.friends_api_usage();
+            let policy = state.settings.friends_api_usage;
             let mut out = Vec::new();
 
             for (k, v) in users {
@@ -388,16 +388,16 @@ where
                         out.push(self.handle_players(
                             state,
                             &state.players.connected,
-                            state.settings.friends_api_usage(),
-                            state.settings.steam_api_key(),
+                            state.settings.friends_api_usage,
+                            &state.settings.steam_api_key,
                             true,
                         ));
                     } else {
                         out.push(self.handle_players(
                             state,
                             &[*k],
-                            state.settings.friends_api_usage(),
-                            state.settings.steam_api_key(),
+                            state.settings.friends_api_usage,
+                            &state.settings.steam_api_key,
                             true,
                         ));
                     }
@@ -419,11 +419,11 @@ where
 
             let policy = internal
                 .friends_api_usage
-                .unwrap_or_else(|| state.settings.friends_api_usage());
+                .unwrap_or(state.settings.friends_api_usage);
             let key = internal
                 .steam_api_key
                 .as_deref()
-                .unwrap_or_else(|| state.settings.steam_api_key());
+                .unwrap_or_else(|| &state.settings.steam_api_key);
 
             return self.handle_players(state, &state.players.connected, policy, key, false);
         }

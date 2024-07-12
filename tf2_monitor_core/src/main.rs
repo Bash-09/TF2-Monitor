@@ -17,8 +17,9 @@ use player::Players;
 use player_records::PlayerRecords;
 use reqwest::StatusCode;
 use server::Server;
-use settings::Settings;
+use settings::{AppDetails, Settings};
 use state::MonitorState;
+use steamid_ng::SteamID;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     filter::Directive, fmt::writer::MakeWriterExt, layer::SubscriberExt, util::SubscriberInitExt,
@@ -57,6 +58,12 @@ use steam_api::{
     ProfileLookupRequest, ProfileLookupResult,
 };
 use web::{WebAPIHandler, WebRequest};
+
+pub const APP: AppDetails<'static> = AppDetails {
+    qualifier: "com.megascatterbomb",
+    organization: "MAC",
+    application: "MACClient",
+};
 
 define_events!(
     MonitorState,
@@ -100,19 +107,78 @@ define_events!(
     },
 );
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() {
     let _guard = init_tracing();
 
     let args = Args::parse();
 
-    let settings = Settings::load_or_create(&args);
+    let mut settings = Settings::load_or_create(
+        Settings::default_file_location(APP).unwrap_or_else(|e| {
+            tracing::error!("Failed to find a suitable location to store settings ({e}). Settings will be written to {}", settings::CONFIG_FILE_NAME);
+            settings::CONFIG_FILE_NAME.into()
+        }
+    )).expect("Failed to load settings. Please fix any issues mentioned and try again.");
     settings.save_ok();
 
-    let mut playerlist = PlayerRecords::load_or_create(&args);
+    // Resolve steam user
+    match args
+        .steam_user
+        .as_ref()
+        .map(|s| SteamID::try_from(s.as_str()))
+    {
+        Some(Ok(user)) => {
+            settings.steam_user = Some(user);
+            tracing::info!("Steam user set to {}", u64::from(user));
+        }
+        Some(Err(e)) => {
+            tracing::error!("Failed to parse SteamID ({e})");
+            panic!("Please provide a valid SteamID");
+        }
+        None => match settings.infer_steam_user() {
+            Ok(user) => {
+                tracing::info!("Identified current steam user as {}", u64::from(user));
+                settings.steam_user = Some(user);
+                check_launch_options(&settings);
+            }
+            Err(e) => tracing::error!("Failed to identify current steam user: {e}"),
+        },
+    }
+
+    // Resolve TF2 directory
+    if let Some(tf2_dir) = args.tf2_dir {
+        tracing::debug!("Set TF2 directory to {tf2_dir}");
+        settings.tf2_directory = Some(tf2_dir.into());
+    } else {
+        match settings.infer_tf2_directory() {
+            Ok(tf2_dir) => {
+                tracing::debug!("Identified TF2 directory as {tf2_dir:?}");
+                settings.tf2_directory = Some(tf2_dir.into());
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Please provide a valid TF2 directory with \"--tf2-dir path_to_tf2_folder\""
+                );
+                panic!("Failed to locate TF2 directory ({e})");
+            }
+        }
+    }
+    let tf2_directory = settings
+        .tf2_directory
+        .clone()
+        .expect("A valid TF2 directory must be set.");
+
+    let mut playerlist = PlayerRecords::load_or_create(PlayerRecords::default_file_location(APP).unwrap_or_else(|e| {
+        tracing::error!("Failed to find a suitable location to store player records ({e}). Records will be written to {}", player_records::RECORDS_FILE_NAME);
+        player_records::RECORDS_FILE_NAME.into()
+    })).expect("Failed to load player records. Please fix any issues mentioned and try again.");
     playerlist.save_ok();
 
-    let players = Players::new(playerlist, settings.steam_user());
+    let players = Players::new(
+        playerlist,
+        settings.steam_user,
+        Players::default_steam_cache_path(APP).ok(),
+    );
 
     let mut state = MonitorState {
         server: Server::new(),
@@ -120,13 +186,7 @@ fn main() {
         players,
     };
 
-    // Steam user overrides usually imply the TF2 dir cannot be found
-    // so don't check launch options.
-    if !state.settings.is_steam_user_overridden() {
-        check_launch_options(&state.settings);
-    }
-
-    let web_port = state.settings.webui_port();
+    let web_port = state.settings.webui_port;
 
     // The juicy part of the program
     tokio::runtime::Builder::new_multi_thread()
@@ -134,19 +194,19 @@ fn main() {
         .build()
         .expect("Failed to build async runtime")
         .block_on(async {
-            if state.settings.masterbase_key().is_empty() {
+            if state.settings.masterbase_key.is_empty() {
                 state.settings.upload_demos = false;
                 tracing::warn!("No masterbase key is set. If you would like to enable demo uploads, please provision a key at https://megaanticheat.com/provision");
             }
 
             // Close any previous masterbase sessions that might not have finished up
             // properly.
-            if state.settings.upload_demos() {
+            if state.settings.upload_demos {
                 const TIMEOUT: u64 = 4;
                 match tokio::time::timeout(Duration::from_secs(TIMEOUT), async { masterbase::force_close_session(
-                    state.settings.masterbase_host(),
-                    state.settings.masterbase_key(),
-                    state.settings.use_masterbase_http(),
+                    &state.settings.masterbase_host,
+                    &state.settings.masterbase_key,
+                    state.settings.masterbase_http,
                 ).await})
                 .await
                 {
@@ -187,15 +247,8 @@ fn main() {
                 r.store(false, Ordering::SeqCst);
             });
 
-            // Autolaunch UI
-            if args.autolaunch_ui || state.settings.autolaunch_ui() {
-                if let Err(e) = open::that(Path::new(&format!("http://localhost:{web_port}"))) {
-                    tracing::error!("Failed to open web browser: {:?}", e);
-                }
-            }
-
             // Demo watcher and manager
-            let demo_path = state.settings.tf2_directory().join("tf");
+            let demo_path = tf2_directory.join("tf");
             let demo_watcher = if args.dont_parse_demos { None } else { DemoWatcher::new(&demo_path)
                 .map_err(|e| {
                     tracing::error!("Could not initialise demo watcher: {e}");
@@ -203,14 +256,21 @@ fn main() {
                 .ok()};
 
             // Web API
-            let (web_state, web_requests) = WebState::new(state.settings.web_ui_source());
+            let (web_state, web_requests) = WebState::new(&state.settings.web_ui_source);
             tokio::task::spawn(async move {
                 web_main(web_state, web_port).await;
             });
 
+            // Autolaunch UI
+            if state.settings.autolaunch_ui {
+                if let Err(e) = open::that(Path::new(&format!("http://localhost:{web_port}"))) {
+                    tracing::error!("Failed to open web browser: {:?}", e);
+                }
+            }
+
             // Watch console log
             let log_file_path: PathBuf =
-                PathBuf::from(state.settings.tf2_directory()).join("tf/console.log");
+                tf2_directory.join("tf/console.log");
             let console_log = Box::new(ConsoleLog::new(log_file_path).await);
 
             let mut event_loop: EventLoop<MonitorState, Message, Handler> = EventLoop::new()
@@ -226,11 +286,8 @@ fn main() {
                 .add_handler(LookupFriends::new())
                 .add_handler(DumbAutoKick)
                 .add_handler(WebAPIHandler::new())
+                .add_handler(PrintVotes::new())
                 .add_handler(SseEventBroadcaster::new());
-
-            if args.print_votes {
-                event_loop = event_loop.add_handler(PrintVotes::new());
-            }
 
             if args.dont_parse_demos {
                 tracing::info!("Demo parsing has been disabled. This also prevents uploading demos to the masterbase.");
@@ -259,7 +316,7 @@ fn check_launch_options(settings: &Settings) {
     // Launch options and overrides
     let launch_opts = match LaunchOptions::new(
         settings
-            .steam_user()
+            .steam_user
             .expect("Failed to identify the local steam user (failed to find `loginusers.vdf`)"),
     ) {
         Ok(val) => Some(val),

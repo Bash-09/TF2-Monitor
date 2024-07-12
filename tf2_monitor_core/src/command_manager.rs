@@ -310,8 +310,8 @@ where
         state: &MonitorState,
         message: &IM,
     ) -> Option<event_loop::Handled<OM>> {
-        let port = state.settings.rcon_port();
-        let pwd = state.settings.rcon_password();
+        let port = state.settings.rcon_port;
+        let pwd = &state.settings.rcon_password;
 
         if try_get::<Refresh>(message).is_some() {
             self.refresh_status = !self.refresh_status;
@@ -333,7 +333,7 @@ where
 {
     fn handle_message(&mut self, state: &MonitorState, message: &IM) -> Option<Handled<OM>> {
         let _ = try_get(message)?;
-        if !state.settings.autokick_bots() {
+        if !state.settings.autokick_bots {
             return None;
         }
 

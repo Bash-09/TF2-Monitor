@@ -34,6 +34,13 @@ use crate::{
     state::MonitorState,
     steam_api::{request_steam_info, ProfileLookupResult},
 };
+
+// if feature "include-ui" is enabled, bundle the web UI files
+#[cfg(feature = "include-ui")]
+static BUNDLED_UI: Option<Dir> = Some(include_dir::include_dir!("$CARGO_MANIFEST_DIR/ui"));
+#[cfg(not(feature = "include-ui"))]
+static BUNDLED_UI: Option<Dir> = None;
+
 const HEADERS: [(header::HeaderName, &str); 2] = [
     (header::CONTENT_TYPE, "application/json"),
     (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
@@ -150,7 +157,7 @@ impl WebAPIHandler {
         users: &UserPostRequest,
         send: UnboundedSender<String>,
     ) -> Option<Handled<OM>> {
-        if state.settings.steam_api_key().is_empty() {
+        if state.settings.steam_api_key.is_empty() {
             return None;
         }
 
@@ -184,7 +191,7 @@ impl WebAPIHandler {
             .extend_from_slice(&request.waiting_users);
 
         // Make steam api requests
-        let client = Arc::new(SteamAPI::new(state.settings.steam_api_key()));
+        let client = Arc::new(SteamAPI::new(&state.settings.steam_api_key));
         let out = Handled::multiple(request.waiting_users.chunks(100).map(|accounts| {
             let accounts = accounts.to_vec();
             let client = client.clone();
@@ -354,14 +361,19 @@ async fn get_ui(
     state.ui.get_ui(&path).await
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Where to get the web UI files to serve
 pub enum UISource {
     Bundled(&'static Dir<'static>),
     /// Load from disk
     Dynamic(PathBuf),
-    #[default]
     None,
+}
+
+impl Default for UISource {
+    fn default() -> Self {
+        BUNDLED_UI.as_ref().map_or(Self::None, Self::Bundled)
+    }
 }
 
 impl UISource {
@@ -556,16 +568,19 @@ fn get_prefs_response(state: &MonitorState) -> String {
     let settings = &state.settings;
     let prefs = Preferences {
         internal: Some(InternalPreferences {
-            friends_api_usage: Some(settings.friends_api_usage()),
-            tf2_directory: Some(settings.tf2_directory().to_string_lossy().into()),
-            rcon_password: Some(settings.rcon_password().to_owned()),
-            steam_api_key: Some(settings.steam_api_key().to_owned()),
-            masterbase_key: Some(settings.masterbase_key().to_owned()),
-            masterbase_host: Some(settings.masterbase_host().to_owned()),
-            rcon_port: Some(settings.rcon_port()),
-            dumb_autokick: Some(settings.autokick_bots()),
+            friends_api_usage: Some(settings.friends_api_usage),
+            tf2_directory: settings
+                .tf2_directory
+                .as_ref()
+                .map(|dir| dir.to_string_lossy().into()),
+            rcon_password: Some(settings.rcon_password.clone()),
+            steam_api_key: Some(settings.steam_api_key.clone()),
+            masterbase_key: Some(settings.masterbase_key.clone()),
+            masterbase_host: Some(settings.masterbase_host.clone()),
+            rcon_port: Some(settings.rcon_port),
+            dumb_autokick: Some(settings.autokick_bots),
         }),
-        external: Some(settings.external_preferences().clone()),
+        external: Some(settings.external.clone()),
     };
 
     serde_json::to_string(&prefs).expect("Epic serialization fail")
@@ -666,7 +681,7 @@ fn get_playerlist_response(state: &MonitorState) -> String {
 
             PlayerRecordResponse {
                 name: state.players.get_name(*id).unwrap_or(""),
-                isSelf: state.settings.steam_user().is_some_and(|user| user == *id),
+                isSelf: state.settings.steam_user.is_some_and(|user| user == *id),
                 steamID64: *id,
                 convicted: Some(false),
                 localVerdict: Some(record.verdict().to_string()),

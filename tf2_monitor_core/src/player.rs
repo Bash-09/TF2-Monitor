@@ -15,16 +15,20 @@ use crate::{
     },
     parties::Parties,
     player_records::{default_custom_data, PlayerRecord, PlayerRecords, Verdict},
-    settings::{ConfigFilesError, Settings},
+    settings::{AppDetails, ConfigFilesError, Settings},
 };
 
 pub mod tags {
     pub const FRIEND: &str = "Friend";
 }
 
+pub const STEAM_CACHE_FILE_NAME: &str = "steam_cache.bin";
+
 // const MAX_HISTORY_LEN: usize = 100;
 
 pub struct Players {
+    cache_path: Option<PathBuf>,
+
     pub game_info: HashMap<SteamID, GameInfo>,
     pub steam_info: HashMap<SteamID, SteamInfo>,
     pub friend_info: HashMap<SteamID, FriendInfo>,
@@ -43,8 +47,10 @@ pub struct Players {
 #[allow(dead_code)]
 impl Players {
     #[must_use]
-    pub fn new(records: PlayerRecords, user: Option<SteamID>) -> Self {
+    pub fn new(records: PlayerRecords, user: Option<SteamID>, cache_path: Option<PathBuf>) -> Self {
         let mut players = Self {
+            cache_path,
+
             game_info: HashMap::new(),
             steam_info: HashMap::new(),
             friend_info: HashMap::new(),
@@ -59,18 +65,28 @@ impl Players {
             parties_needs_update: false,
         };
 
-        match players.load_steam_info() {
-            Ok(()) => tracing::info!(
-                "Loaded steam info cache with {} entries.",
-                players.steam_info.len()
-            ),
-            Err(ConfigFilesError::IO(_, e)) if e.kind() == std::io::ErrorKind::NotFound => {
-                tracing::warn!("No steam info cache was found, creating a new one.");
+        if players.cache_path.is_some() {
+            match players.load_steam_info() {
+                Ok(()) => tracing::info!(
+                    "Loaded steam info cache with {} entries.",
+                    players.steam_info.len()
+                ),
+                Err(ConfigFilesError::IO(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+                    tracing::warn!("No steam info cache was found, creating a new one.");
+                }
+                Err(e) => tracing::error!("Failed to load steam info cache: {e}"),
             }
-            Err(e) => tracing::error!("Failed to load steam info cache: {e}"),
         }
 
         players
+    }
+
+    /// Attempt to locate a suitable location to store the steam cache
+    ///
+    /// # Errors
+    /// - If no suitable directory could be found to store the steam cache
+    pub fn default_steam_cache_path(app_details: AppDetails) -> Result<PathBuf, ConfigFilesError> {
+        Ok(Settings::locate_config_directory(app_details)?.join(STEAM_CACHE_FILE_NAME))
     }
 
     /// Retrieve the local verdict for a player
@@ -419,22 +435,25 @@ impl Players {
             .collect()
     }
 
-    fn locate_steam_info_cache_path() -> Result<PathBuf, ConfigFilesError> {
-        Settings::locate_config_directory().map(|p| p.join("steam_cache.bin"))
-    }
-
     /// # Errors
     /// If the file could not be read from disk or the data could not be deserialized
     pub fn load_steam_info(&mut self) -> Result<(), ConfigFilesError> {
-        let path = Self::locate_steam_info_cache_path()?;
+        let path = self
+            .cache_path
+            .as_ref()
+            .ok_or(ConfigFilesError::NoConfigSet)?
+            .clone();
         self.load_steam_info_from(&path)
     }
 
     /// # Errors
     /// If the data could not be serialized or the file could not be written back to disk
     pub fn save_steam_info(&self) -> Result<(), ConfigFilesError> {
-        let path = Self::locate_steam_info_cache_path()?;
-        self.save_steam_info_to(&path)
+        let path = self
+            .cache_path
+            .as_ref()
+            .ok_or(ConfigFilesError::NoConfigSet)?;
+        self.save_steam_info_to(path)
     }
 
     pub fn save_steam_info_ok(&self) {
@@ -446,21 +465,16 @@ impl Players {
     }
 
     fn load_steam_info_from(&mut self, path: &Path) -> Result<(), ConfigFilesError> {
-        let contents = std::fs::read(path)
-            .map_err(|e| ConfigFilesError::IO(path.to_string_lossy().into(), e))?;
-        let steam_info = pot::from_slice(&contents)
-            .map_err(|e| ConfigFilesError::Pot(path.to_string_lossy().into(), e))?;
+        let contents = std::fs::read(path)?;
+        let steam_info = pot::from_slice(&contents)?;
 
         self.steam_info = steam_info;
         Ok(())
     }
 
     fn save_steam_info_to(&self, path: &Path) -> Result<(), ConfigFilesError> {
-        let contents = pot::to_vec(&self.steam_info)
-            .map_err(|e| ConfigFilesError::Pot(path.to_string_lossy().into(), e))?;
-        std::fs::write(path, contents)
-            .map_err(|e| ConfigFilesError::IO(path.to_string_lossy().into(), e))?;
-
+        let contents = pot::to_vec(&self.steam_info)?;
+        std::fs::write(path, contents)?;
         Ok(())
     }
 }

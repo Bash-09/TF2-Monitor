@@ -6,67 +6,52 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::Context;
 use atomic_write_file::AtomicWriteFile;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use steamid_ng::SteamID;
 
-use crate::{
-    args::Args,
-    settings::{merge_json_objects, ConfigFilesError, Settings},
-};
+use crate::settings::{merge_json_objects, AppDetails, ConfigFilesError, Settings};
+
+pub const RECORDS_FILE_NAME: &str = "playerlist.json";
 
 // PlayerList
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct PlayerRecords {
     #[serde(skip)]
-    path: PathBuf,
+    pub path: Option<PathBuf>,
     pub records: HashMap<SteamID, PlayerRecord>,
 }
 
 impl PlayerRecords {
+    /// # Errors
+    /// If the config directory could not be located (usually because no valid
+    /// home directory was found)
+    pub fn default_file_location(app_details: AppDetails) -> Result<PathBuf, ConfigFilesError> {
+        Ok(Settings::locate_config_directory(app_details)?.join(RECORDS_FILE_NAME))
+    }
+
     /// Attempts to load the playerlist from the overriden (if provided in
     /// [Args]) or default location. If it cannot be found, then a new one
     /// is created at the location.
     ///
-    /// # Panics
+    /// # Errors
     /// If the playerlist file was provided but could not be parsed, or another
-    /// unexpected error occurred, to prevent data loss.
+    /// unexpected error occurred
     #[allow(clippy::cognitive_complexity)]
-    pub fn load_or_create(args: &Args) -> Self {
-        // Playerlist
-        let playerlist_path: PathBuf = args
-        .playerlist
-        .as_ref()
-        .map_or_else(Self::locate_playerlist_file, |i| Ok(i.into())).map_err(|e| {
-            tracing::error!("Could not find a suitable location for the playerlist: {} \nPlease specify a file path manually with --playerlist otherwise information may not be saved.", e); 
-        }).unwrap_or_else(|()| PathBuf::from("playerlist.json"));
-
-        match Self::load_from(playerlist_path) {
-            Ok(playerlist) => playerlist,
-            Err(ConfigFilesError::Json(path, e)) => {
-                tracing::error!("{} could not be loaded: {:?}", path, e);
-                tracing::error!(
-                    "Please resolve any issues or remove the file, otherwise data may be lost."
-                );
-                panic!("Failed to load playerlist")
+    pub fn load_or_create(playerlist_file_path: PathBuf) -> Result<Self, ConfigFilesError> {
+        match Self::load_from(playerlist_file_path.clone()) {
+            Ok(records) => Ok(records),
+            Err(ConfigFilesError::IO(e)) if e.kind() == ErrorKind::NotFound => {
+                tracing::warn!("Could not locate {playerlist_file_path:?}, creating new file.");
+                Ok(Self {
+                    path: Some(playerlist_file_path),
+                    ..Default::default()
+                })
             }
-            Err(ConfigFilesError::IO(path, e)) if e.kind() == ErrorKind::NotFound => {
-                tracing::warn!("Could not locate {}, creating new playerlist.", &path);
-                let mut playerlist = Self::default();
-                playerlist.set_path(path.into());
-                playerlist
-            }
-            Err(e) => {
-                tracing::error!("Could not load playerlist: {:?}", e);
-                tracing::error!(
-                    "Please resolve any issues or remove the file, otherwise data may be lost."
-                );
-                panic!("Failed to load playerlist")
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -75,11 +60,9 @@ impl PlayerRecords {
     /// # Errors
     /// If the file could not be located, read, or parsed.
     pub fn load_from(path: PathBuf) -> Result<Self, ConfigFilesError> {
-        let contents = std::fs::read_to_string(&path)
-            .map_err(|e| ConfigFilesError::IO(path.to_string_lossy().into(), e))?;
-        let mut playerlist: Self = serde_json::from_str(&contents)
-            .map_err(|e| ConfigFilesError::Json(path.to_string_lossy().into(), e))?;
-        playerlist.path = path;
+        let contents = std::fs::read_to_string(&path)?;
+        let mut playerlist: Self = serde_json::from_str(&contents)?;
+        playerlist.path = Some(path);
 
         // Map all of the steamids to the records. They were not included when
         // serializing/deserializing the records to prevent duplication in the
@@ -108,55 +91,28 @@ impl PlayerRecords {
     /// If it failed to serialize or write back to the file.
     pub fn save(&mut self) -> Result<(), ConfigFilesError> {
         self.prune();
-        let contents = serde_json::to_string(self).context("Failed to serialize playerlist.")?;
 
-        let err_map = |e| ConfigFilesError::IO(self.path.to_string_lossy().into(), e);
+        let path = self.path.as_ref().ok_or(ConfigFilesError::NoConfigSet)?;
 
-        let mut file = AtomicWriteFile::open(&self.path).map_err(err_map)?;
-        write!(file, "{contents}").map_err(err_map)?;
-        file.commit().map_err(err_map)?;
+        let mut file = AtomicWriteFile::open(path)?;
+        let contents = serde_json::to_string(self)?;
+
+        write!(file, "{contents}")?;
+        file.commit()?;
 
         Ok(())
     }
 
-    /// Attempt to save the `PlayerRecords`, log errors and ignore result
     pub fn save_ok(&mut self) {
-        if let Err(e) = self.save() {
-            tracing::error!("Failed to save playerlist: {:?}", e);
-            return;
+        match self.save() {
+            Ok(()) => tracing::debug!("Successfully saved player records to {:?}", self.path),
+            Err(e) => tracing::error!("Failed to save player records to {:?}: {e}", self.path),
         }
-        // this will never fail to unwrap because the above error would have occured
-        // first and broken control flow.
-        tracing::debug!("Playerlist saved to {:?}", self.path);
-    }
-
-    pub fn set_path(&mut self, path: PathBuf) {
-        self.path = path;
-    }
-
-    /// # Errors
-    /// If the config directory could not be located (usually because no valid
-    /// home directory was found)
-    pub fn locate_playerlist_file() -> Result<PathBuf, ConfigFilesError> {
-        Settings::locate_config_directory().map(|dir| dir.join("playerlist.json"))
     }
 
     pub fn update_name(&mut self, steamid: SteamID, name: &str) {
         if let Some(record) = self.records.get_mut(&steamid) {
             record.add_previous_name(name);
-        }
-    }
-}
-
-impl Default for PlayerRecords {
-    fn default() -> Self {
-        let path = Self::locate_playerlist_file()
-            .map_err(|e| tracing::warn!("Failed to create config directory: {:?}", e))
-            .unwrap_or_else(|()| "playerlist.json".into());
-
-        Self {
-            path,
-            records: HashMap::new(),
         }
     }
 }

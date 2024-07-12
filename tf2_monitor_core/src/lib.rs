@@ -119,7 +119,6 @@
 //! ```
 //!
 
-pub mod args;
 pub mod command_manager;
 pub mod console;
 pub mod demo;

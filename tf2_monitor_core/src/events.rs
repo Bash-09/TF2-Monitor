@@ -104,28 +104,28 @@ impl Message<MonitorState> for Preferences {
         if let Some(internal) = self.internal {
             if let Some(tf2_dir) = internal.tf2_directory {
                 let path: PathBuf = tf2_dir.into();
-                state.settings.set_tf2_directory(path);
+                state.settings.tf2_directory = Some(path);
             }
             if let Some(rcon_pwd) = internal.rcon_password {
-                state.settings.set_rcon_password(rcon_pwd);
+                state.settings.rcon_password = rcon_pwd;
             }
             if let Some(rcon_port) = internal.rcon_port {
-                state.settings.set_rcon_port(rcon_port);
+                state.settings.rcon_port = rcon_port;
             }
             if let Some(steam_api_key) = internal.steam_api_key {
-                state.settings.set_steam_api_key(steam_api_key);
+                state.settings.steam_api_key = steam_api_key;
             }
             if let Some(friends_api_usage) = internal.friends_api_usage {
-                state.settings.set_friends_api_usage(friends_api_usage);
+                state.settings.friends_api_usage = friends_api_usage;
             }
             if let Some(masterbase_key) = internal.masterbase_key {
-                state.settings.set_masterbase_key(masterbase_key);
+                state.settings.masterbase_key = masterbase_key;
             }
             if let Some(masterbase_host) = internal.masterbase_host {
-                state.settings.set_masterbase_host(masterbase_host);
+                state.settings.masterbase_host = masterbase_host;
             }
             if let Some(autokick) = internal.dumb_autokick {
-                state.settings.set_autokick_bots(autokick);
+                state.settings.autokick_bots = autokick;
             }
         }
 

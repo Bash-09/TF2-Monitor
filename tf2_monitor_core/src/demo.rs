@@ -278,11 +278,11 @@ impl DemoManagerSession {
         header: &Header,
         demo_name: &str,
     ) -> Option<Handled<M>> {
-        let host = settings.masterbase_host().to_owned();
-        let key = settings.masterbase_key().to_owned();
+        let host = settings.masterbase_host.clone();
+        let key = settings.masterbase_key.clone();
         let map = header.map.clone();
         let fake_ip = header.server.clone();
-        let http = settings.use_masterbase_http();
+        let http = settings.masterbase_http;
         let demo_name = demo_name.to_owned();
         let session = self.0.clone();
 
@@ -528,7 +528,7 @@ impl DemoManager {
 
         // Don't parse contents if the user only wants minimal parsing, except
         // if we still need to extract the headers.
-        if !(parsed_header && state.settings.minimal_demo_parsing()) {
+        if !(parsed_header && state.settings.minimal_demo_parsing) {
             events.extend(
                 demo.append_bytes(&msg.bytes)
                     .into_iter()
@@ -536,7 +536,7 @@ impl DemoManager {
             );
         }
 
-        if !state.settings.upload_demos() {
+        if !state.settings.upload_demos {
             return Handled::multiple(events);
         }
 
