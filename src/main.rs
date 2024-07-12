@@ -5,6 +5,7 @@ use std::{
     any::TypeId, cell::RefCell, collections::{HashMap, HashSet}, io::Cursor, path::PathBuf, time::Duration
 };
 use bytes::Bytes;
+use replay::{ReplayMessage, ReplayState};
 use tf2_monitor_core::{
     console::ConsoleLog,
     demo::{DemoWatcher, PrintVotes},
@@ -47,6 +48,7 @@ use tf2_monitor_core::{
 
 pub mod gui;
 pub mod settings;
+pub mod replay;
 mod tracing_setup;
 
 pub const APP: AppDetails<'static> = AppDetails {
@@ -135,6 +137,9 @@ pub struct App {
     pfp_cache: HashMap<String, (iced::widget::image::Handle, iced::widget::image::Handle)>,
     pfp_in_progess: HashSet<String>,
 
+    // Replay
+    replay: ReplayState,
+
     // Change TF2 directory
     change_tf2_dir: Sender<PathBuf>,
     _tf2_dir_changed: RefCell<Option<Receiver<PathBuf>>>,
@@ -160,6 +165,7 @@ pub enum Message {
     Open(String),
     MAC(MACMessage),
     ToggleMACEnabled(bool),
+    BrowseTF2Dir,
 
     /// Which page of records to display
     SetRecordPage(usize),
@@ -171,6 +177,8 @@ pub enum Message {
     ScrolledKills(RelativeOffset),
 
     SetKickBots(bool),
+
+    Replay(ReplayMessage),
 }
 
 impl Application for App {
@@ -220,6 +228,8 @@ impl Application for App {
 
                 pfp_cache: HashMap::new(),
                 pfp_in_progess: HashSet::new(),
+
+                replay: ReplayState::new(),
 
                 change_tf2_dir: tf2_dir_tx,
                 _tf2_dir_changed: RefCell::new(Some(tf2_dir_rx)),
@@ -400,6 +410,16 @@ impl Application for App {
                 if enabled {
                     return verify_masterbase_connection(&self.mac.settings);
                 }
+            },
+            Message::Replay(m) => {
+                return self.replay.handle_message(m, &self.mac);
+            },
+            Message::BrowseTF2Dir => {
+                let Some(new_tf2_dir) = rfd::FileDialog::new().pick_folder() else {
+                    return iced::Command::none();
+                };
+                self.mac.settings.tf2_directory = Some(new_tf2_dir.clone());
+                self.change_tf2_dir.send(new_tf2_dir).map_err(|e| tracing::error!("TF2 Directory could not be update for console and demo watchers: {e}")).ok();
             },
         };
 

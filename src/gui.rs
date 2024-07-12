@@ -17,6 +17,7 @@ pub mod icons;
 pub mod killfeed;
 pub mod player;
 pub mod records;
+pub mod replay;
 pub mod server;
 pub mod settings;
 pub mod styles;
@@ -27,6 +28,8 @@ pub enum View {
     History,
     Settings,
     Records,
+    Demos,
+    Replay,
 }
 
 pub const FONT_SIZE: u16 = 13;
@@ -143,8 +146,10 @@ pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
         match state.view {
             View::Server => server::view(state),
             View::History => history::view(state),
-            View::Settings => settings::view(state),
             View::Records => records::view(state),
+            View::Demos => coming_soon(),
+            View::Replay => state.replay.view(state),
+            View::Settings => settings::view(state),
         }
     ]
     .width(Length::FillPortion(SPLIT[0]))
@@ -170,6 +175,8 @@ pub fn view_select(_: &App) -> IcedElement<'_> {
         Button::new("Server").on_press(Message::SetView(View::Server)),
         Button::new("History").on_press(Message::SetView(View::History)),
         Button::new("Records").on_press(Message::SetView(View::Records)),
+        Button::new("Demos").on_press(Message::SetView(View::Demos)),
+        Button::new("Replay").on_press(Message::SetView(View::Replay)),
         Button::new("Settings").on_press(Message::SetView(View::Settings)),
         widget::horizontal_space(),
         Button::new("Chat and Killfeed").on_press(Message::ToggleChatKillfeed),
@@ -186,4 +193,27 @@ pub fn tooltip<'a>(
 ) -> Tooltip<'a, Message, iced::Theme, iced::Renderer> {
     Tooltip::new(element, tooltip, iced::widget::tooltip::Position::Bottom)
         .style(theme::Container::Box)
+}
+
+#[must_use]
+pub fn needs_tf2_dir<'a>() -> IcedElement<'a> {
+    widget::Container::new(widget::column![
+        widget::text("TF2 directory must be set to use this feature."),
+        widget::button("Set TF2 Directory").on_press(Message::BrowseTF2Dir),
+    ])
+    .center_x()
+    .center_y()
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+#[must_use]
+pub fn coming_soon<'a>() -> IcedElement<'a> {
+    widget::Container::new(widget::text("Coming soon!"))
+        .center_x()
+        .center_y()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }

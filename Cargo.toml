@@ -13,7 +13,7 @@ chrono = "0.4.38"
 clap = "4.4.8"
 tf2_monitor_core = { git = "https://github.com/Bash-09/TF2-Monitor-Core" }
 iced = { version = "0.12.1", features = ["tokio", "image"] }
-image = "0.25.1"
+image = "0.24.9"
 open = "5.0.1"
 reqwest = "0.11.22"
 serde = "1.0.192"
@@ -24,3 +24,11 @@ tokio = "1.34.0"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+# demo2replay
+bitbuffer = "0.10.9"
+tf-demo-parser = "0.5.1"
+vtf = "0.2.1"
+filenamify = "0.1.0"
+rfd = "0.14.1"
+anyhow = "1.0.86"
