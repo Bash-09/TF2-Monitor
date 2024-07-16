@@ -1,15 +1,14 @@
 use std::{io::Cursor, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
-use bitbuffer::BitRead;
 use chrono::{Datelike, Timelike};
 use filenamify::filenamify;
 use iced::widget;
 use image::{io::Reader, DynamicImage, GenericImage, GenericImageView, ImageFormat};
-use tf2_monitor_core::state::MonitorState;
-use tf_demo_parser::{
-    demo::{self, header::Header},
-    Demo,
+use tf2_monitor_core::{
+    bitbuffer::BitRead,
+    state::MonitorState,
+    tf_demo_parser::{demo::header::Header, Demo},
 };
 
 use crate::{gui::replay::main_window, App, IcedElement, Message};
@@ -36,7 +35,7 @@ const SUB_HANDLE: &str = "%handle%";
 pub struct ReplayState {
     pub demo_path: Option<PathBuf>,
     pub thumbnail_path: Option<PathBuf>,
-    pub demo: Result<demo::header::Header, String>,
+    pub demo: Result<Header, String>,
     pub status: String,
 
     pub replay_name: String,
