@@ -138,8 +138,10 @@ pub mod state;
 pub mod steam_api;
 pub mod web;
 
+pub use bitbuffer;
 pub use clap;
 pub use event_loop;
 pub use rcon;
 pub use serde_json;
 pub use steamid_ng;
+pub use tf_demo_parser;
