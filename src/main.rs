@@ -49,7 +49,6 @@ use tf2_monitor_core::{
 pub mod gui;
 pub mod settings;
 pub mod replay;
-pub mod demo_indexing;
 mod tracing_setup;
 
 pub const APP: AppDetails<'static> = AppDetails {
