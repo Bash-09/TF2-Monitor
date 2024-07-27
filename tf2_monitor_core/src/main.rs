@@ -31,6 +31,7 @@ mod args;
 mod command_manager;
 mod console;
 mod demo;
+mod demo_analyser;
 mod events;
 mod gamefinder;
 mod io;

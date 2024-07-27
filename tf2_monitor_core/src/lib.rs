@@ -122,6 +122,7 @@
 pub mod command_manager;
 pub mod console;
 pub mod demo;
+pub mod demo_analyser;
 pub mod events;
 pub mod gamefinder;
 pub mod io;
