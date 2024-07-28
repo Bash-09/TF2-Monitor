@@ -101,9 +101,7 @@ impl AnalysedDemo {
     /// If the demo failed to parse for some reason
     #[allow(clippy::too_many_lines)]
     pub fn new(demo_bytes: &[u8]) -> Result<Self, Error> {
-        let mut hasher = DefaultHasher::new();
-        demo_bytes.hash(&mut hasher);
-        let hash = hasher.finish();
+        let hash = hash_demo(demo_bytes);
 
         let demo = Demo::new(demo_bytes);
         let mut stream = demo.get_stream();
@@ -284,4 +282,12 @@ impl AnalysedDemo {
 
         Ok(analysed_demo)
     }
+}
+
+/// Takes a hash of the demo bytes
+#[must_use]
+pub fn hash_demo(demo_bytes: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    demo_bytes.hash(&mut hasher);
+    hasher.finish()
 }
