@@ -12,6 +12,7 @@ use crate::{App, IcedContainer, IcedElement, Message};
 use self::styles::picklist::VerdictPickList;
 
 pub mod chat;
+pub mod demos;
 pub mod history;
 pub mod icons;
 pub mod killfeed;
@@ -22,7 +23,7 @@ pub mod server;
 pub mod settings;
 pub mod styles;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Server,
     History,
@@ -147,7 +148,7 @@ pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
             View::Server => server::view(state),
             View::History => history::view(state),
             View::Records => records::view(state),
-            View::Demos => coming_soon(),
+            View::Demos => demos::view(state),
             View::Replay => state.replay.view(state),
             View::Settings => settings::view(state),
         }
@@ -170,14 +171,27 @@ pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
 }
 
 #[must_use]
-pub fn view_select(_: &App) -> IcedElement<'_> {
+pub fn view_select(state: &App) -> IcedElement<'_> {
+    const VIEWS: &[(&str, View)] = &[
+        ("Server", View::Server),
+        ("History", View::History),
+        ("Records", View::Records),
+        ("Demos", View::Demos),
+        ("Replay", View::Replay),
+        ("Settings", View::Settings),
+    ];
+
+    let mut views = row![].spacing(10);
+    for &(name, v) in VIEWS {
+        let mut button = Button::new(name);
+        if state.view != v {
+            button = button.on_press(Message::SetView(v));
+        }
+        views = views.push(button);
+    }
+
     let content = row![
-        Button::new("Server").on_press(Message::SetView(View::Server)),
-        Button::new("History").on_press(Message::SetView(View::History)),
-        Button::new("Records").on_press(Message::SetView(View::Records)),
-        Button::new("Demos").on_press(Message::SetView(View::Demos)),
-        Button::new("Replay").on_press(Message::SetView(View::Replay)),
-        Button::new("Settings").on_press(Message::SetView(View::Settings)),
+        views,
         widget::horizontal_space(),
         Button::new("Chat and Killfeed").on_press(Message::ToggleChatKillfeed),
     ]

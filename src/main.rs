@@ -18,7 +18,7 @@ use tf2_monitor_core::{
     state::MonitorState,
     steamid_ng::SteamID,
 };
-use gui::{chat, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
+use gui::{chat, demos::{DemosMessage, DemosState}, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -139,6 +139,9 @@ pub struct App {
     // Replay
     replay: ReplayState,
 
+    // Demos
+    demos: DemosState,
+
     // Change TF2 directory
     change_tf2_dir: Sender<PathBuf>,
     _tf2_dir_changed: RefCell<Option<Receiver<PathBuf>>>,
@@ -172,6 +175,8 @@ pub enum Message {
     /// Records search bar
     SetRecordSearch(String),
 
+    Demos(DemosMessage),
+
     ScrolledChat(RelativeOffset),
     ScrolledKills(RelativeOffset),
 
@@ -193,48 +198,49 @@ impl Application for App {
     fn new((mut mac, event_loop, settings): Self::Flags) -> (Self, iced::Command<Self::Message>) {
 
         mac.settings.upload_demos = settings.enable_mac_integration;
-        let command = if settings.enable_mac_integration {
-            verify_masterbase_connection(&mac.settings)
-        } else {
-            iced::Command::none()
+        let mut commands = Vec::new();
+        if settings.enable_mac_integration {
+            commands.push(verify_masterbase_connection(&mac.settings));
         };
 
         let (tf2_dir_tx, tf2_dir_rx) = tokio::sync::broadcast::channel(1);
+        let app = Self {
+            mac,
+            event_loop,
+            settings,
 
-        (
-            Self {
-                mac,
-                event_loop,
-                settings,
+            view: View::Server,
+            selected_player: None,
 
-                view: View::Server,
-                selected_player: None,
+            snap_chat_to_bottom: true,
+            snap_kills_to_bottom: true,
 
-                snap_chat_to_bottom: true,
-                snap_kills_to_bottom: true,
+            records_to_display: Vec::new(),
+            records_per_page: 50,
+            record_page: 0,
+            record_verdict_whitelist: vec![
+                Verdict::Trusted,
+                Verdict::Player,
+                Verdict::Suspicious,
+                Verdict::Cheater,
+                Verdict::Bot,
+            ],
+            record_search: String::new(),
 
-                records_to_display: Vec::new(),
-                records_per_page: 50,
-                record_page: 0,
-                record_verdict_whitelist: vec![
-                    Verdict::Trusted,
-                    Verdict::Player,
-                    Verdict::Suspicious,
-                    Verdict::Cheater,
-                    Verdict::Bot,
-                ],
-                record_search: String::new(),
+            pfp_cache: HashMap::new(),
+            pfp_in_progess: HashSet::new(),
 
-                pfp_cache: HashMap::new(),
-                pfp_in_progess: HashSet::new(),
+            replay: ReplayState::new(),
 
-                replay: ReplayState::new(),
+            demos: DemosState::new(),
 
-                change_tf2_dir: tf2_dir_tx,
-                _tf2_dir_changed: RefCell::new(Some(tf2_dir_rx)),
-            },
-            command,
-        )
+            change_tf2_dir: tf2_dir_tx,
+            _tf2_dir_changed: RefCell::new(Some(tf2_dir_rx)),
+        };
+
+        commands.push(DemosState::refresh_demos(&app));
+
+        (app, iced::Command::batch(commands))
     }
 
     fn title(&self) -> String {
@@ -419,6 +425,9 @@ impl Application for App {
                 };
                 self.mac.settings.tf2_directory = Some(new_tf2_dir.clone());
                 self.change_tf2_dir.send(new_tf2_dir).map_err(|e| tracing::error!("TF2 Directory could not be update for console and demo watchers: {e}")).ok();
+            },
+            Message::Demos(msg) => {
+                return DemosState::handle_message(self, msg);
             },
         };
 
