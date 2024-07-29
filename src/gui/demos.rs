@@ -1,26 +1,38 @@
-use std::{collections::HashMap, path::PathBuf, time::SystemTime};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::mpsc::Sender,
+    time::SystemTime,
+};
 
 use iced::{
     widget::{self, Scrollable},
     Length,
 };
-use tf2_monitor_core::demo_analyser::AnalysedDemo;
+use tf2_monitor_core::demo_analyser::{self, AnalysedDemo};
+use threadpool::ThreadPool;
 use tokio::task::JoinSet;
 
 use crate::{App, IcedElement, Message};
 
 use super::PFP_SMALL_SIZE;
 
-pub type AnalysedDemoID = u64;
+type TokioReceiver<T> = tokio::sync::mpsc::UnboundedReceiver<T>;
 
 #[allow(clippy::module_name_repetitions)]
 pub struct DemosState {
     demo_files: Vec<Demo>,
-    analysed_demos: HashMap<AnalysedDemoID, AnalysedDemo>,
     demos_to_display: Vec<usize>,
+    analysed_demos: HashMap<PathBuf, AnalysedDemo>,
+    /// Demos in progress
+    analysing_demos: HashSet<PathBuf>,
 
     demos_per_page: usize,
     page: usize,
+
+    request_analysis: Sender<PathBuf>,
+    pub _demo_analysis_output: RefCell<Option<TokioReceiver<(PathBuf, Option<AnalysedDemo>)>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +40,6 @@ pub struct Demo {
     name: String,
     path: PathBuf,
     created: SystemTime,
-    analysed: AnalysedDemoID,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +48,8 @@ pub enum DemosMessage {
     Refresh,
     SetDemos(Vec<Demo>),
     SetPage(usize),
+    AnalyseDemo(PathBuf),
+    DemoAnalysed(PathBuf, Option<AnalysedDemo>),
 }
 
 impl From<DemosMessage> for Message {
@@ -48,12 +61,37 @@ impl From<DemosMessage> for Message {
 impl DemosState {
     #[must_use]
     pub fn new() -> Self {
+        let (request_tx, request_rx) = std::sync::mpsc::channel();
+        let (completed_tx, completed_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Spawn analyser thread
+        std::thread::spawn(move || {
+            let pool = ThreadPool::new(4);
+
+            while let Ok(demo_path) = request_rx.recv() {
+                let tx = completed_tx.clone();
+                pool.execute(move || {
+                    let demo = std::fs::read(&demo_path)
+                        .map_err(|e| tracing::error!("Failed to read demo file {demo_path:?}: {e}"))
+                        .ok()
+                        .and_then(|demo_bytes| demo_analyser::AnalysedDemo::new(&demo_bytes).ok());
+                    tx.send((demo_path, demo))
+                        .expect("Failed to send analysed demo to main thread.");
+                });
+            }
+        });
+
         Self {
             demo_files: Vec::new(),
-            analysed_demos: HashMap::new(),
             demos_to_display: Vec::new(),
+            analysed_demos: HashMap::new(),
+            analysing_demos: HashSet::new(),
+
             demos_per_page: 50,
             page: 0,
+
+            request_analysis: request_tx,
+            _demo_analysis_output: RefCell::new(Some(completed_rx)),
         }
     }
 
@@ -64,6 +102,30 @@ impl DemosState {
             DemosMessage::SetDemos(demo_files) => {
                 state.demos.demo_files = demo_files;
                 state.demos.update_demos_to_display();
+            }
+            DemosMessage::AnalyseDemo(demo_path) => {
+                if state.demos.analysing_demos.contains(&demo_path) {
+                    return iced::Command::none();
+                }
+
+                state.demos.analysing_demos.insert(demo_path.clone());
+                state
+                    .demos
+                    .request_analysis
+                    .send(demo_path)
+                    .expect("Couldn't request analysis of demo. Demo analyser thread ded?");
+            }
+            DemosMessage::DemoAnalysed(demo_path, analysed_demo) => {
+                state.demos.analysing_demos.remove(&demo_path);
+
+                match analysed_demo {
+                    Some(analysed_demo) => {
+                        state.demos.analysed_demos.insert(demo_path, analysed_demo);
+                    }
+                    None => {
+                        tracing::error!("Failed to analyse demo {demo_path:?}");
+                    }
+                }
             }
         }
 
@@ -123,7 +185,6 @@ impl DemosState {
                                 name: file_name,
                                 path: file_path,
                                 created,
-                                analysed: 0,
                             })
                         });
                     }

@@ -7,16 +7,7 @@ use std::{
 use bytes::Bytes;
 use replay::{ReplayMessage, ReplayState};
 use tf2_monitor_core::{
-    console::ConsoleLog,
-    demo::DemoWatcher,
-    event_loop::{self, define_events, EventLoop, MessageSource},
-    masterbase,
-    player::Players,
-    player_records::{PlayerRecords, Verdict},
-    server::Server,
-    settings::{AppDetails, Settings},
-    state::MonitorState,
-    steamid_ng::SteamID,
+    console::ConsoleLog, demo::DemoWatcher, demo_analyser::AnalysedDemo, event_loop::{self, define_events, EventLoop, MessageSource}, masterbase, player::Players, player_records::{PlayerRecords, Verdict}, server::Server, settings::{AppDetails, Settings}, state::MonitorState, steamid_ng::SteamID
 };
 use gui::{chat, demos::{DemosMessage, DemosState}, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
@@ -261,6 +252,8 @@ impl Application for App {
         let log_file_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf/console.log"));
         let demo_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf"));
 
+        let analysed_demo_rx = self.demos._demo_analysis_output.replace(None);
+
         iced::Subscription::batch([
             iced::event::listen().map(Message::EventOccurred),
             iced::time::every(Duration::from_secs(2))
@@ -316,6 +309,17 @@ impl Application for App {
                     }
                     
                 },
+            ),
+            iced::subscription::channel(
+                TypeId::of::<AnalysedDemo>(), 
+                50, 
+                |mut output| async move {
+                    let mut analysed_demo_rx = analysed_demo_rx.expect("Should have been a valid receiver.");
+                    loop {
+                        let (demo_path, demo) = analysed_demo_rx.recv().await.expect("Couldn't receive any more analysed demos.");
+                        output.send(Message::Demos(DemosMessage::DemoAnalysed(demo_path, demo))).await.expect("Couldn't forward analysed demo.");
+                    }
+                }
             ),
         ])
     }
