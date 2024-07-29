@@ -1,20 +1,29 @@
-use std::{collections::HashMap, path::PathBuf, time::SystemTime};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::PathBuf,
+    time::SystemTime,
+};
 
 use iced::{
     widget::{self, Scrollable},
     Length,
 };
-use tf2_monitor_core::demo_analyser::{self, AnalysedDemo};
+use tf2_monitor_core::demo_analyser::AnalysedDemo;
 use tokio::task::JoinSet;
 
 use crate::{App, IcedElement, Message};
 
 use super::PFP_SMALL_SIZE;
 
+pub type DemoID = u64;
+pub type AnalysedDemoID = u64;
+
 #[allow(clippy::module_name_repetitions)]
 pub struct DemosState {
-    demo_files: HashMap<u64, Demo>,
-    demos_to_display: Vec<u64>,
+    demo_files: HashMap<DemoID, Demo>,
+    analysed_demos: HashMap<AnalysedDemoID, AnalysedDemo>,
+    demos_to_display: Vec<DemoID>,
 
     demos_per_page: usize,
     page: usize,
@@ -25,7 +34,7 @@ pub struct Demo {
     name: String,
     path: PathBuf,
     created: SystemTime,
-    analysed: Option<AnalysedDemo>,
+    analysed: AnalysedDemoID,
 }
 
 #[derive(Debug, Clone)]
@@ -47,19 +56,20 @@ impl DemosState {
     pub fn new() -> Self {
         Self {
             demo_files: HashMap::new(),
+            analysed_demos: HashMap::new(),
             demos_to_display: Vec::new(),
             demos_per_page: 50,
             page: 0,
         }
     }
 
-    pub fn handle_message(app: &mut App, message: DemosMessage) -> iced::Command<Message> {
+    pub fn handle_message(state: &mut App, message: DemosMessage) -> iced::Command<Message> {
         match message {
-            DemosMessage::Refresh => todo!(),
-            DemosMessage::SetPage(page) => app.demos.page = page,
+            DemosMessage::Refresh => return Self::refresh_demos(state),
+            DemosMessage::SetPage(page) => state.demos.page = page,
             DemosMessage::SetDemos(demo_files) => {
-                app.demos.demo_files = demo_files;
-                app.demos.update_demos_to_display();
+                state.demos.demo_files = demo_files;
+                state.demos.update_demos_to_display();
             }
         }
 
@@ -112,13 +122,11 @@ impl DemosState {
                             }
 
                             let metadata = dir_entry.metadata().await.ok()?;
-
                             let created = metadata.created().ok()?;
-
                             let file_path = dir_entry.path();
-                            let demo_bytes = tokio::fs::read(&file_path).await.ok()?;
-
-                            let hash = demo_analyser::hash_demo(&demo_bytes);
+                            let mut hasher = DefaultHasher::new();
+                            file_path.hash(&mut hasher);
+                            let hash = hasher.finish();
 
                             Some((
                                 hash,
@@ -126,7 +134,7 @@ impl DemosState {
                                     name: file_name,
                                     path: file_path,
                                     created,
-                                    analysed: None,
+                                    analysed: 0,
                                 },
                             ))
                         });
