@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-    path::PathBuf,
-    time::SystemTime,
-};
+use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 use iced::{
     widget::{self, Scrollable},
@@ -16,14 +11,13 @@ use crate::{App, IcedElement, Message};
 
 use super::PFP_SMALL_SIZE;
 
-pub type DemoID = u64;
 pub type AnalysedDemoID = u64;
 
 #[allow(clippy::module_name_repetitions)]
 pub struct DemosState {
-    demo_files: HashMap<DemoID, Demo>,
+    demo_files: Vec<Demo>,
     analysed_demos: HashMap<AnalysedDemoID, AnalysedDemo>,
-    demos_to_display: Vec<DemoID>,
+    demos_to_display: Vec<usize>,
 
     demos_per_page: usize,
     page: usize,
@@ -41,7 +35,7 @@ pub struct Demo {
 #[allow(clippy::module_name_repetitions)]
 pub enum DemosMessage {
     Refresh,
-    SetDemos(HashMap<u64, Demo>),
+    SetDemos(Vec<Demo>),
     SetPage(usize),
 }
 
@@ -55,7 +49,7 @@ impl DemosState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            demo_files: HashMap::new(),
+            demo_files: Vec::new(),
             analysed_demos: HashMap::new(),
             demos_to_display: Vec::new(),
             demos_per_page: 50,
@@ -77,10 +71,10 @@ impl DemosState {
     }
 
     fn update_demos_to_display(&mut self) {
-        let mut demos: Vec<_> = self.demo_files.iter().collect();
+        let mut demos: Vec<_> = self.demo_files.iter().enumerate().collect();
         demos.sort_by_key(|(_, demo)| demo.created);
         demos.reverse();
-        self.demos_to_display = demos.iter().map(|(hash, _)| **hash).collect();
+        self.demos_to_display = demos.iter().map(|(idx, _)| *idx).collect();
     }
 
     pub fn refresh_demos(state: &App) -> iced::Command<Message> {
@@ -91,7 +85,7 @@ impl DemosState {
 
         iced::Command::perform(
             async move {
-                let mut demos = HashMap::new();
+                let mut demos = Vec::new();
 
                 // Directories
                 for dir in dirs_to_search {
@@ -106,7 +100,7 @@ impl DemosState {
                     };
 
                     // Files in each directory
-                    let mut join_handles: JoinSet<Option<(u64, Demo)>> = JoinSet::new();
+                    let mut join_handles: JoinSet<Option<Demo>> = JoinSet::new();
                     while let Ok(Some(dir_entry)) = dir_entries.next_entry().await {
                         join_handles.spawn(async move {
                             let file_type = dir_entry.file_type().await.ok()?;
@@ -124,29 +118,23 @@ impl DemosState {
                             let metadata = dir_entry.metadata().await.ok()?;
                             let created = metadata.created().ok()?;
                             let file_path = dir_entry.path();
-                            let mut hasher = DefaultHasher::new();
-                            file_path.hash(&mut hasher);
-                            let hash = hasher.finish();
 
-                            Some((
-                                hash,
-                                Demo {
-                                    name: file_name,
-                                    path: file_path,
-                                    created,
-                                    analysed: 0,
-                                },
-                            ))
+                            Some(Demo {
+                                name: file_name,
+                                path: file_path,
+                                created,
+                                analysed: 0,
+                            })
                         });
                     }
 
                     while let Some(result) = join_handles.join_next().await {
-                        let Ok(Some((hash, demo))) = result else {
+                        let Ok(Some(demo)) = result else {
                             continue;
                         };
 
                         tracing::debug!("Added demo {}", demo.name);
-                        demos.insert(hash, demo);
+                        demos.push(demo);
                     }
                 }
                 demos
@@ -213,7 +201,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
         .iter()
         .skip(state.demos.page * state.demos.demos_per_page)
         .take(state.demos.demos_per_page)
-        .filter_map(|hash| state.demos.demo_files.get(hash))
+        .filter_map(|idx| state.demos.demo_files.get(*idx))
     {
         contents = contents.push(row(state, d));
     }
