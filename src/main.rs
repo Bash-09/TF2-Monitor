@@ -258,12 +258,11 @@ impl Application for App {
         #[allow(clippy::used_underscore_binding)]
         let _ = self._tf2_dir_changed.replace(None);
         
-        // TODO - Do something so I don't have to unwrap this
         let log_file_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf/console.log"));
         let demo_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf"));
 
         iced::Subscription::batch([
-            // iced::subscription::events().map(Message::EventOccurred),
+            iced::event::listen().map(Message::EventOccurred),
             iced::time::every(Duration::from_secs(2))
                 .map(|_| Message::MAC(MonitorMessage::Refresh(Refresh))),
             iced::time::every(Duration::from_millis(500))
