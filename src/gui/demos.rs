@@ -49,6 +49,7 @@ pub enum DemosMessage {
     SetDemos(Vec<Demo>),
     SetPage(usize),
     AnalyseDemo(PathBuf),
+    AnalyseAll,
     DemoAnalysed(PathBuf, Option<AnalysedDemo>),
 }
 
@@ -127,11 +128,28 @@ impl DemosState {
                     }
                 }
             }
+            DemosMessage::AnalyseAll => {
+                for d in state.demos.demo_files.iter() {
+                    if state.demos.analysed_demos.contains_key(&d.path)
+                        || state.demos.analysing_demos.contains(&d.path)
+                    {
+                        continue;
+                    }
+
+                    state.demos.analysing_demos.insert(d.path.clone());
+                    state
+                        .demos
+                        .request_analysis
+                        .send(d.path.clone())
+                        .expect("Couldn't request analysis of demo. Demo analyser thread ded?");
+                }
+            }
         }
 
         iced::Command::none()
     }
 
+    /// Update the list of which demos should be displayed in order
     fn update_demos_to_display(&mut self) {
         let mut demos: Vec<_> = self.demo_files.iter().enumerate().collect();
         demos.sort_by_key(|(_, demo)| demo.created);
@@ -139,6 +157,7 @@ impl DemosState {
         self.demos_to_display = demos.iter().map(|(idx, _)| *idx).collect();
     }
 
+    /// Clear the current store of demo files and search the directories for new demo files
     pub fn refresh_demos(state: &App) -> iced::Command<Message> {
         let mut dirs_to_search = Vec::new();
         if let Some(tf2_dir) = &state.mac.settings.tf2_directory {
@@ -242,7 +261,9 @@ pub fn view(state: &App) -> IcedElement<'_> {
             DemosMessage::SetPage(state.demos.page.saturating_add(1).min(num_pages - 1)).into()
         ),
         button(">>").on_press(DemosMessage::SetPage(num_pages - 1).into()),
-        widget::horizontal_space(),
+        widget::Space::with_width(Length::FillPortion(1)),
+        button("Analyse all").on_press(DemosMessage::AnalyseAll.into()),
+        widget::Space::with_width(Length::FillPortion(1)),
         widget::text(format!(
             "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
             state.demos.demo_files.len(),
