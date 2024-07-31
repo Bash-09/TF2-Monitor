@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
+    path::Path,
+    time::SystemTime,
 };
 
 use bitbuffer::{BitError, BitRead};
@@ -16,10 +18,10 @@ use tf_demo_parser::{
     },
     Demo, ParseError,
 };
+use tokio::io::AsyncReadExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysedDemo {
-    pub hash: u64,
     pub header: Header,
     pub demo_version: u16,
     pub interval_per_tick: f32,
@@ -101,15 +103,12 @@ impl AnalysedDemo {
     /// If the demo failed to parse for some reason
     #[allow(clippy::too_many_lines)]
     pub fn new(demo_bytes: &[u8]) -> Result<Self, Error> {
-        let hash = hash_demo(demo_bytes);
-
         let demo = Demo::new(demo_bytes);
         let mut stream = demo.get_stream();
 
         let header = Header::read(&mut stream)?;
 
         let mut analysed_demo = Self {
-            hash,
             header,
             demo_version: 0,
             interval_per_tick: 0.0,
@@ -284,10 +283,26 @@ impl AnalysedDemo {
     }
 }
 
-/// Takes a hash of the demo bytes
+/// Takes a hash of the header and created time of a demo file
+///
+/// # Errors
+/// If the created time or header bytes could not be read from the provided file
+#[allow(clippy::future_not_send)]
+pub async fn hash_demo_file(demo_file: impl AsRef<Path>) -> Result<u64, std::io::Error> {
+    let mut demo_file = tokio::fs::File::open(demo_file).await?;
+    let demo_meta = demo_file.metadata().await?;
+    let created = demo_meta.created()?;
+    let mut header_bytes = [0u8; 0x430];
+    let _ = demo_file.read_exact(&mut header_bytes).await?;
+
+    Ok(hash_demo(&header_bytes, created))
+}
+
+/// Takes a hash of the header and created time of a demo
 #[must_use]
-pub fn hash_demo(demo_bytes: &[u8]) -> u64 {
+pub fn hash_demo(demo_bytes: &[u8], created: SystemTime) -> u64 {
     let mut hasher = DefaultHasher::new();
-    demo_bytes.hash(&mut hasher);
+    created.hash(&mut hasher);
+    demo_bytes[..demo_bytes.len().min(0x430)].hash(&mut hasher);
     hasher.finish()
 }
