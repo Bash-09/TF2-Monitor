@@ -252,6 +252,7 @@ impl Application for App {
         let log_file_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf/console.log"));
         let demo_path = self.mac.settings.tf2_directory.clone().map(|path| path.join("tf"));
 
+        #[allow(clippy::used_underscore_binding)]
         let analysed_demo_rx = self.demos._demo_analysis_output.replace(None);
 
         iced::Subscription::batch([
@@ -316,8 +317,9 @@ impl Application for App {
                 |mut output| async move {
                     let mut analysed_demo_rx = analysed_demo_rx.expect("Should have been a valid receiver.");
                     loop {
-                        let (demo_path, demo) = analysed_demo_rx.recv().await.expect("Couldn't receive any more analysed demos.");
-                        output.send(Message::Demos(DemosMessage::DemoAnalysed(demo_path, demo))).await.expect("Couldn't forward analysed demo.");
+                        let demo = analysed_demo_rx.recv().await.expect("Couldn't receive any more analysed demos.");
+                        tracing::debug!("Received analysed demo {:?}", demo.0);
+                        output.send(Message::Demos(DemosMessage::DemoAnalysed(demo))).await.expect("Couldn't forward analysed demo.");
                     }
                 }
             ),

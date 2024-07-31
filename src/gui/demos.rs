@@ -1,6 +1,8 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    io::Read,
+    os::unix::fs::MetadataExt,
     path::PathBuf,
     sync::mpsc::Sender,
     time::SystemTime,
@@ -12,19 +14,21 @@ use iced::{
 };
 use tf2_monitor_core::demo_analyser::{self, AnalysedDemo};
 use threadpool::ThreadPool;
-use tokio::task::JoinSet;
+use tokio::{io::AsyncReadExt, task::JoinSet};
 
 use crate::{App, IcedElement, Message};
 
-use super::PFP_SMALL_SIZE;
+use super::{icons, tooltip, FONT_SIZE, PFP_SMALL_SIZE};
 
+pub type AnalysedDemoID = u64;
 type TokioReceiver<T> = tokio::sync::mpsc::UnboundedReceiver<T>;
+type AnalysedDemoResult = (PathBuf, Option<(AnalysedDemoID, Box<AnalysedDemo>)>);
 
 #[allow(clippy::module_name_repetitions)]
 pub struct DemosState {
     demo_files: Vec<Demo>,
     demos_to_display: Vec<usize>,
-    analysed_demos: HashMap<PathBuf, AnalysedDemo>,
+    analysed_demos: HashMap<u64, AnalysedDemo>,
     /// Demos in progress
     analysing_demos: HashSet<PathBuf>,
 
@@ -32,7 +36,8 @@ pub struct DemosState {
     page: usize,
 
     request_analysis: Sender<PathBuf>,
-    pub _demo_analysis_output: RefCell<Option<TokioReceiver<(PathBuf, Option<AnalysedDemo>)>>>,
+    #[allow(clippy::pub_underscore_fields, clippy::type_complexity)]
+    pub _demo_analysis_output: RefCell<Option<TokioReceiver<AnalysedDemoResult>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +45,8 @@ pub struct Demo {
     name: String,
     path: PathBuf,
     created: SystemTime,
+    file_size: u64,
+    analysed: AnalysedDemoID,
 }
 
 #[derive(Debug, Clone)]
@@ -50,7 +57,7 @@ pub enum DemosMessage {
     SetPage(usize),
     AnalyseDemo(PathBuf),
     AnalyseAll,
-    DemoAnalysed(PathBuf, Option<AnalysedDemo>),
+    DemoAnalysed(AnalysedDemoResult),
 }
 
 impl From<DemosMessage> for Message {
@@ -67,17 +74,27 @@ impl DemosState {
 
         // Spawn analyser thread
         std::thread::spawn(move || {
-            let pool = ThreadPool::new(4);
+            let pool = ThreadPool::new(num_cpus::get());
 
             while let Ok(demo_path) = request_rx.recv() {
+                tracing::debug!("Received request to analyse {demo_path:?}");
                 let tx = completed_tx.clone();
                 pool.execute(move || {
-                    let demo = std::fs::read(&demo_path)
+                    tracing::debug!("Analysing {demo_path:?}");
+                    let payload = std::fs::File::open(&demo_path)
                         .map_err(|e| tracing::error!("Failed to read demo file {demo_path:?}: {e}"))
                         .ok()
-                        .and_then(|demo_bytes| demo_analyser::AnalysedDemo::new(&demo_bytes).ok());
-                    tx.send((demo_path, demo))
-                        .expect("Failed to send analysed demo to main thread.");
+                        .and_then(|mut f| {
+                            let created = f.metadata().and_then(|m| m.created()).ok()?;
+                            let mut bytes = Vec::new();
+                            let _ = f.read_to_end(&mut bytes).ok()?;
+                            let hash = demo_analyser::hash_demo(&bytes, created);
+                            let demo = demo_analyser::AnalysedDemo::new(&bytes).ok()?;
+                            Some((hash, Box::new(demo)))
+                        });
+
+                    tracing::debug!("Finished analysing {demo_path:?}");
+                    tx.send((demo_path, payload)).ok();
                 });
             }
         });
@@ -96,6 +113,7 @@ impl DemosState {
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn handle_message(state: &mut App, message: DemosMessage) -> iced::Command<Message> {
         match message {
             DemosMessage::Refresh => return Self::refresh_demos(state),
@@ -116,12 +134,13 @@ impl DemosState {
                     .send(demo_path)
                     .expect("Couldn't request analysis of demo. Demo analyser thread ded?");
             }
-            DemosMessage::DemoAnalysed(demo_path, analysed_demo) => {
+            DemosMessage::DemoAnalysed((demo_path, analysed_demo)) => {
                 state.demos.analysing_demos.remove(&demo_path);
 
                 match analysed_demo {
-                    Some(analysed_demo) => {
-                        state.demos.analysed_demos.insert(demo_path, analysed_demo);
+                    Some((hash, analysed_demo)) => {
+                        state.demos.analysed_demos.insert(hash, *analysed_demo);
+                        tracing::debug!("Successfully got analysed demo {demo_path:?}");
                     }
                     None => {
                         tracing::error!("Failed to analyse demo {demo_path:?}");
@@ -129,8 +148,8 @@ impl DemosState {
                 }
             }
             DemosMessage::AnalyseAll => {
-                for d in state.demos.demo_files.iter() {
-                    if state.demos.analysed_demos.contains_key(&d.path)
+                for d in &state.demos.demo_files {
+                    if state.demos.analysed_demos.contains_key(&d.analysed)
                         || state.demos.analysing_demos.contains(&d.path)
                     {
                         continue;
@@ -199,11 +218,17 @@ impl DemosState {
                             let metadata = dir_entry.metadata().await.ok()?;
                             let created = metadata.created().ok()?;
                             let file_path = dir_entry.path();
+                            let mut demo_file = tokio::fs::File::open(&file_path).await.ok()?;
+
+                            let mut header_bytes = [0u8; 0x430];
+                            demo_file.read_exact(&mut header_bytes).await.ok()?;
 
                             Some(Demo {
                                 name: file_name,
                                 path: file_path,
                                 created,
+                                analysed: demo_analyser::hash_demo(&header_bytes, created),
+                                file_size: metadata.size(),
                             })
                         });
                     }
@@ -301,7 +326,29 @@ pub fn view(state: &App) -> IcedElement<'_> {
 
 #[must_use]
 fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
-    widget::row![widget::text(&demo.name)]
+    let mut contents = widget::row![];
+    // let mut contents = widget::row![widget::text(&demo.name)];
+
+    // Analysed
+    if let Some(analysed) = state.demos.analysed_demos.get(&demo.analysed) {
+        contents = contents.push(
+            widget::button(widget::text(&demo.name).size(FONT_SIZE))
+                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo.path.clone()))),
+        );
+    } else {
+        // Not analysed
+        contents = contents.push(
+            widget::button(widget::text(&demo.name).size(FONT_SIZE))
+                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo.path.clone()))),
+        );
+        contents = contents.push(widget::horizontal_space());
+        contents = contents.push(tooltip(
+            icons::icon(icons::BLOCK),
+            widget::text("Demo has not been analysed."),
+        ));
+    }
+
+    contents
         .width(Length::Fill)
         .height(PFP_SMALL_SIZE) // Just because it's consistent with the records
         .into()
