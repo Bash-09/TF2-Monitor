@@ -18,7 +18,11 @@ use tokio::{io::AsyncReadExt, task::JoinSet};
 
 use crate::{App, IcedElement, Message};
 
-use super::{icons, tooltip, FONT_SIZE, PFP_SMALL_SIZE};
+use super::{
+    icons::{self, icon},
+    styles::colours,
+    tooltip, FONT_SIZE, PFP_SMALL_SIZE,
+};
 
 pub type AnalysedDemoID = u64;
 type TokioReceiver<T> = tokio::sync::mpsc::UnboundedReceiver<T>;
@@ -45,6 +49,7 @@ pub struct Demo {
     name: String,
     path: PathBuf,
     created: SystemTime,
+    /// In bytes
     file_size: u64,
     analysed: AnalysedDemoID,
 }
@@ -267,7 +272,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
         (state.demos.page + 1) * state.demos.demos_per_page
     };
 
-    let button = |contents: &str| {
+    let arrow_button = |contents: &str| {
         widget::button(
             widget::column![widget::text(contents)]
                 .width(25)
@@ -277,17 +282,18 @@ pub fn view(state: &App) -> IcedElement<'_> {
 
     let header = widget::row![
         widget::Space::with_width(15),
-        button("<<").on_press(DemosMessage::SetPage(0).into()),
-        button("<").on_press(DemosMessage::SetPage(state.demos.page.saturating_sub(1)).into()),
+        arrow_button("<<").on_press(DemosMessage::SetPage(0).into()),
+        arrow_button("<")
+            .on_press(DemosMessage::SetPage(state.demos.page.saturating_sub(1)).into()),
         widget::column![widget::text(format!("{}", state.demos.page + 1))]
             .align_items(iced::Alignment::Center)
             .width(75),
-        button(">").on_press(
+        arrow_button(">").on_press(
             DemosMessage::SetPage(state.demos.page.saturating_add(1).min(num_pages - 1)).into()
         ),
-        button(">>").on_press(DemosMessage::SetPage(num_pages - 1).into()),
+        arrow_button(">>").on_press(DemosMessage::SetPage(num_pages - 1).into()),
         widget::Space::with_width(Length::FillPortion(1)),
-        button("Analyse all").on_press(DemosMessage::AnalyseAll.into()),
+        widget::button(widget::text("Analyse all")).on_press(DemosMessage::AnalyseAll.into()),
         widget::Space::with_width(Length::FillPortion(1)),
         widget::text(format!(
             "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
@@ -317,6 +323,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
         widget::Space::with_height(15),
         header,
         widget::Space::with_height(15),
+        widget::horizontal_rule(1),
         Scrollable::new(contents)
     ]
     .width(Length::Fill)
@@ -325,31 +332,144 @@ pub fn view(state: &App) -> IcedElement<'_> {
 }
 
 #[must_use]
+#[allow(clippy::too_many_lines)]
 fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
-    let mut contents = widget::row![];
-    // let mut contents = widget::row![widget::text(&demo.name)];
+    let recorded_ago = SystemTime::now()
+        .duration_since(demo.created)
+        .unwrap_or_default();
+
+    let recorded_ago_str = if recorded_ago.as_secs() < 60 {
+        "Less than a minute ago".to_string()
+    } else if recorded_ago.as_secs() == 60 {
+        String::from("1 minute ago")
+    } else if recorded_ago.as_secs() < 60 * 60 {
+        format!("{} minutes ago", recorded_ago.as_secs() / 60)
+    } else if recorded_ago.as_secs() == 60 * 60 {
+        String::from("1 hour ago")
+    } else if recorded_ago.as_secs() < 60 * 60 * 24 {
+        format!("{} hours ago", recorded_ago.as_secs() / (60 * 60))
+    } else if recorded_ago.as_secs() == 60 * 60 * 24 {
+        String::from("1 day ago")
+    } else {
+        format!("{} days ago", recorded_ago.as_secs() / (60 * 60 * 24))
+    };
+
+    let mut contents = widget::row![]
+        .align_items(iced::Alignment::Center)
+        .height(PFP_SMALL_SIZE)
+        .spacing(15);
 
     // Analysed
     if let Some(analysed) = state.demos.analysed_demos.get(&demo.analysed) {
+        let hostname = if analysed.server_name.len() > 30 {
+            let mut host = analysed.server_name.split_at(27).0.to_string();
+            host.push_str("...");
+            host
+        } else {
+            analysed.server_name.clone()
+        };
+
+        let map = if analysed.header.map.len() > 30 {
+            let mut map = analysed.header.map.split_at(27).0.to_string();
+            map.push_str("...");
+            map
+        } else {
+            analysed.header.map.clone()
+        };
+
+        contents = contents
+            .push(widget::row![widget::button(widget::text(hostname).size(FONT_SIZE))].width(200));
+        contents = contents.push(widget::text(recorded_ago_str).width(100));
+        contents = contents.push(widget::text(map).width(Length::FillPortion(4)));
+
+        let mut badges = widget::row![]
+            .spacing(15)
+            .align_items(iced::Alignment::Center)
+            .width(Length::FillPortion(3));
+
+        if let Some(player) = analysed.players.get(&analysed.user) {
+            badges = badges.push(tooltip(
+                widget::row![
+                    widget::text(player.kills.len()).style(colours::green()),
+                    widget::text("/"),
+                    widget::text(player.deaths.len()).style(colours::red()),
+                    widget::text("/"),
+                    widget::text(player.assists.len()).style(colours::team_blu()),
+                ]
+                .spacing(5),
+                widget::text("Kills/Deaths/Assists"),
+            ));
+            badges = badges.push(widget::horizontal_space());
+
+            for &c in player.most_played_classes.iter().take(3) {
+                let details = &player.class_details[c as usize];
+                let secs = details.time % 60;
+                let mins = (details.time / 60) % 60;
+                let hours = details.time / (60 * 60);
+                let time_played = if hours == 0 {
+                    format!("{mins}:{secs:02}")
+                } else {
+                    format!("{hours}:{mins:02}:{secs:02}")
+                };
+
+                badges = badges.push(tooltip(
+                    icon(icons::CLASS[c as usize]).style(colours::orange()),
+                    widget::column![
+                        widget::text(format!("{c:?}")),
+                        widget::row![widget::text("Time played: "), widget::text(time_played),],
+                        widget::row![
+                            widget::text("K/D/A: "),
+                            widget::text(format!(
+                                "{}/{}/{}",
+                                details.num_kills, details.num_deaths, details.num_assists
+                            )),
+                        ],
+                    ],
+                ));
+            }
+        } else {
+            badges = badges.push(widget::text("Missing player"));
+        }
+
+        contents = contents.push(badges);
+
+        // <Player> on <Server> (<map>) for <time>
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let duration = analysed.header.duration as u32;
+        let secs = duration % 60;
+        let mins = (duration / 60) % 60;
+        let hours = duration / (60 * 60);
+
+        let duration = if hours > 0 {
+            format!("{hours}:{mins:02}:{secs:02}")
+        } else {
+            format!("{mins}:{secs:02}")
+        };
+
         contents = contents.push(
-            widget::button(widget::text(&demo.name).size(FONT_SIZE))
-                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo.path.clone()))),
+            widget::column![widget::text(duration)]
+                .align_items(iced::Alignment::End)
+                .width(65),
         );
     } else {
-        // Not analysed
+        let analysing = state.demos.analysing_demos.contains(&demo.path);
+
+        let mut analyse_button = widget::button(widget::text("Analyse demo").size(FONT_SIZE));
+
+        if !analysing {
+            analyse_button = analyse_button
+                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo.path.clone())));
+        }
+
+        contents = contents.push(analyse_button);
+        contents = contents.push(widget::text(&demo.name).width(Length::FillPortion(2)));
+        contents = contents.push(widget::text(recorded_ago_str).width(Length::FillPortion(1)));
         contents = contents.push(
-            widget::button(widget::text(&demo.name).size(FONT_SIZE))
-                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo.path.clone()))),
+            widget::text(format!("{:.2} MB", demo.file_size as f32 / 1_000_000.0))
+                .width(Length::FillPortion(1)),
         );
-        contents = contents.push(widget::horizontal_space());
-        contents = contents.push(tooltip(
-            icons::icon(icons::BLOCK),
-            widget::text("Demo has not been analysed."),
-        ));
     }
 
-    contents
-        .width(Length::Fill)
-        .height(PFP_SMALL_SIZE) // Just because it's consistent with the records
-        .into()
+    // widget::column![top_row, bottom_row]
+    contents.width(Length::Fill).into()
 }

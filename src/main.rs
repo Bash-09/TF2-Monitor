@@ -764,7 +764,7 @@ fn main() {
         .add_handler(LookupFriends::new());
 
     let mut iced_settings = iced::Settings::with_flags((core, event_loop, app_settings.clone()));
-    iced_settings.window.min_size = Some(iced::Size::new(600.0, 400.0));
+    iced_settings.window.min_size = Some(iced::Size::new(800.0, 400.0));
     iced_settings.fonts.push(FONT_FILE.into());
     // iced_settings.fonts.push(&FONT_FILE);
     if let Some((x, y)) = app_settings.window_pos {

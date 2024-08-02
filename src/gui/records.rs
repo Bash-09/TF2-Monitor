@@ -65,8 +65,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
         text_input("Search", &state.record_search).on_input(Message::SetRecordSearch),
     ]
     .spacing(15)
-    .align_items(iced::Alignment::Center)
-    .padding(15);
+    .align_items(iced::Alignment::Center);
 
     // Records
     let mut contents = widget::column![].spacing(3).padding(15);
@@ -82,7 +81,10 @@ pub fn view(state: &App) -> IcedElement<'_> {
     widget::column![
         widget::Space::with_height(15),
         header,
+        widget::Space::with_height(15),
         filters,
+        widget::Space::with_height(15),
+        widget::horizontal_rule(1),
         Scrollable::new(contents)
     ]
     .width(Length::Fill)

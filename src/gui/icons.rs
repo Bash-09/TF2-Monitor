@@ -17,6 +17,19 @@ pub const JOINING: char = '\u{e809}';
 pub const TICK: char = '\u{f14a}';
 pub const CROSS: char = '\u{e80a}';
 
+pub const CLASS: [char; 10] = [
+    BLOCK,      // Other
+    '\u{e80c}', // Scout
+    '\u{e80b}', // Sniper
+    '\u{e810}', // Soldier
+    '\u{e80f}', // Demoman
+    '\u{e80e}', // Medic
+    '\u{e811}', // Heavy
+    '\u{e80d}', // Pyro
+    '\u{e812}', // Spy
+    '\u{e813}', // Engineer
+];
+
 // Generated using https://fontello.com
 pub const FONT_FILE: &[u8] = include_bytes!("../../icons.ttf");
 
