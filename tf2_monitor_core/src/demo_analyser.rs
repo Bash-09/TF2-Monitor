@@ -11,8 +11,9 @@ use steamid_ng::SteamID;
 use tf_demo_parser::{
     demo::{
         data::{DemoTick, ServerTick},
+        gamevent::GameEvent,
         header::Header,
-        message::Message,
+        message::{gameevent::GameEventMessage, Message},
         packet::{message::MessagePacket, Packet},
         parser::{
             analyser::Class, gamestateanalyser::GameStateAnalyser, DemoHandler, RawPacketStream,
@@ -24,6 +25,7 @@ use tokio::io::AsyncReadExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysedDemo {
+    pub user: SteamID,
     pub header: Header,
     pub server_name: String,
     pub demo_version: u16,
@@ -112,6 +114,7 @@ impl AnalysedDemo {
         let header = Header::read(&mut stream)?;
 
         let mut analysed_demo = Self {
+            user: SteamID::from(0u64),
             header,
             server_name: String::new(),
             demo_version: 0,
@@ -138,13 +141,27 @@ impl AnalysedDemo {
             // Killstreak? Can I be bothered?
             #[allow(clippy::single_match)]
             match &packet {
-                Packet::Message(MessagePacket { messages, .. }) => {
+                Packet::Signon(MessagePacket { messages, .. }) => {
                     for m in messages {
                         match m {
                             Message::ServerInfo(server_info) => {
                                 analysed_demo
                                     .server_name
                                     .clone_from(&server_info.server_name);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Packet::Message(MessagePacket { messages, .. }) => {
+                    for m in messages {
+                        match m {
+                            // Player join
+                            Message::GameEvent(GameEventMessage {
+                                event: GameEvent::PlayerConnectClient(_client_connect),
+                                ..
+                            }) => {
+                                // TODO
                             }
                             _ => {}
                         }
@@ -160,7 +177,11 @@ impl AnalysedDemo {
                 continue;
             }
 
-            let tick_delta = handler.server_tick - last_tick;
+            let tick_delta = if last_tick == 0 {
+                ServerTick::from(0)
+            } else {
+                handler.server_tick - last_tick
+            };
             last_tick = handler.server_tick;
             num_ticks_checked += 1;
 
@@ -294,10 +315,29 @@ impl AnalysedDemo {
             .values_mut()
             .for_each(|p| p.average_ping /= num_ticks_checked);
 
+        // User
+        if let Some(steamid) = handler
+            .borrow_output()
+            .players
+            .iter()
+            .filter_map(|p| p.info.as_ref())
+            .find(|ui| ui.name == analysed_demo.header.nick)
+            .and_then(|ui| SteamID::try_from(ui.steam_id.as_str()).ok())
+        {
+            analysed_demo.user = steamid;
+        }
+
         // Metadata
         let meta = &handler.get_parser_state().demo_meta;
         analysed_demo.demo_version = meta.version;
         analysed_demo.interval_per_tick = meta.interval_per_tick;
+
+        // Scale time
+        analysed_demo.players.values_mut().for_each(|p| {
+            p.class_details.iter_mut().for_each(|d| {
+                let time = d.time = (d.time as f32 * analysed_demo.interval_per_tick) as u32;
+            });
+        });
 
         Ok(analysed_demo)
     }
