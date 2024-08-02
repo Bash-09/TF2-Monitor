@@ -12,6 +12,8 @@ use tf_demo_parser::{
     demo::{
         data::{DemoTick, ServerTick},
         header::Header,
+        message::Message,
+        packet::{message::MessagePacket, Packet},
         parser::{
             analyser::Class, gamestateanalyser::GameStateAnalyser, DemoHandler, RawPacketStream,
         },
@@ -23,6 +25,7 @@ use tokio::io::AsyncReadExt;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysedDemo {
     pub header: Header,
+    pub server_name: String,
     pub demo_version: u16,
     pub interval_per_tick: f32,
     pub players: HashMap<SteamID, DemoPlayer>,
@@ -110,6 +113,7 @@ impl AnalysedDemo {
 
         let mut analysed_demo = Self {
             header,
+            server_name: String::new(),
             demo_version: 0,
             interval_per_tick: 0.0,
             players: HashMap::new(),
@@ -132,6 +136,22 @@ impl AnalysedDemo {
             // Player join
             // Player leave
             // Killstreak? Can I be bothered?
+            #[allow(clippy::single_match)]
+            match &packet {
+                Packet::Message(MessagePacket { messages, .. }) => {
+                    for m in messages {
+                        match m {
+                            Message::ServerInfo(server_info) => {
+                                analysed_demo
+                                    .server_name
+                                    .clone_from(&server_info.server_name);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
 
             handler.handle_packet(packet)?;
 
