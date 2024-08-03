@@ -134,6 +134,8 @@ impl AnalysedDemo {
         let mut num_ticks_checked = 0u64;
         let mut last_kills_len = 0;
         while let Some(packet) = packets.next(&handler.state_handler)? {
+            let mut newly_connected: Option<(String, u16)> = None;
+
             // Custom packet handling
             // TODO
             // Chat
@@ -159,10 +161,11 @@ impl AnalysedDemo {
                         match m {
                             // Player join
                             Message::GameEvent(GameEventMessage {
-                                event: GameEvent::PlayerConnectClient(_client_connect),
+                                event: GameEvent::PlayerConnectClient(client_connect),
                                 ..
                             }) => {
-                                // TODO
+                                newly_connected =
+                                    Some((client_connect.name.to_string(), client_connect.user_id));
                             }
                             _ => {}
                         }
@@ -172,6 +175,23 @@ impl AnalysedDemo {
             }
 
             handler.handle_packet(packet)?;
+
+            if let Some((name, userid)) = newly_connected {
+                if let Some(info) = handler
+                    .borrow_output()
+                    .players
+                    .iter()
+                    .filter_map(|p| p.info.as_ref())
+                    .find(|i| i.user_id == userid)
+                {
+                    if let Some(player) = SteamID::try_from(info.steam_id.as_str())
+                        .ok()
+                        .map(|s| analysed_demo.players.entry(s).or_default())
+                    {
+                        player.name = name;
+                    }
+                }
+            }
 
             // Game state handling
             if handler.server_tick == last_tick {
