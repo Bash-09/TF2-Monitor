@@ -199,6 +199,28 @@ impl AnalysedDemo {
                     })
             };
 
+            // Get player names
+            for (s, ui) in handler
+                .borrow_output()
+                .players
+                .iter()
+                .filter_map(|p| p.info.as_ref())
+                .filter_map(|ui| {
+                    SteamID::try_from(ui.steam_id.as_str())
+                        .ok()
+                        .map(|s| (s, ui))
+                })
+            {
+                let Some(p) = analysed_demo.players.get_mut(&s) else {
+                    continue;
+                };
+
+                if !p.name.is_empty() {
+                    continue;
+                }
+                p.name.clone_from(&ui.name);
+            }
+
             // Update player stats
             for (p, info) in game_state
                 .players
@@ -265,25 +287,6 @@ impl AnalysedDemo {
 
                 last_kills_len = game_state.kills.len();
             }
-        }
-
-        // Name
-        for (s, ui) in handler
-            .borrow_output()
-            .players
-            .iter()
-            .filter_map(|p| p.info.as_ref())
-            .filter_map(|ui| {
-                SteamID::try_from(ui.steam_id.as_str())
-                    .ok()
-                    .map(|s| (s, ui))
-            })
-        {
-            let Some(p) = analysed_demo.players.get_mut(&s) else {
-                continue;
-            };
-
-            p.name.clone_from(&ui.name);
         }
 
         // Most played classes
