@@ -56,13 +56,14 @@ pub fn view(state: &App) -> IcedElement<'_> {
     };
 
     let filters = widget::row![
+        widget::Space::with_width(0),
         filter_checkbox(Verdict::Trusted),
         filter_checkbox(Verdict::Player),
         filter_checkbox(Verdict::Suspicious),
         filter_checkbox(Verdict::Cheater),
         filter_checkbox(Verdict::Bot),
-        // widget::horizontal_space(Length::Fill),
         text_input("Search", &state.record_search).on_input(Message::SetRecordSearch),
+        widget::Space::with_width(0),
     ]
     .spacing(15)
     .align_items(iced::Alignment::Center);
