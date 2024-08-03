@@ -57,6 +57,7 @@ pub struct DemoPlayer {
     pub class_details: [ClassDetails; 10],
     /// Number of seconds, indexed by `tf_demo_parser::demo::parser::analyser::Team`
     pub time_on_team: [u32; 4],
+    pub time: u32,
     pub average_ping: u64,
 }
 
@@ -214,6 +215,7 @@ impl AnalysedDemo {
                 // Update class and team info
                 player.class_details[p.class as usize].time += u32::from(tick_delta);
                 player.time_on_team[p.team as usize] += u32::from(tick_delta);
+                player.time += u32::from(tick_delta);
 
                 // Add ping
                 player.average_ping += u64::from(p.ping);
@@ -335,8 +337,12 @@ impl AnalysedDemo {
         // Scale time
         analysed_demo.players.values_mut().for_each(|p| {
             p.class_details.iter_mut().for_each(|d| {
-                let time = d.time = (d.time as f32 * analysed_demo.interval_per_tick) as u32;
+                d.time = (d.time as f32 * analysed_demo.interval_per_tick) as u32;
             });
+            p.time_on_team.iter_mut().for_each(|t| {
+                *t = (*t as f32 * analysed_demo.interval_per_tick) as u32;
+            });
+            p.time = (p.time as f32 * analysed_demo.interval_per_tick) as u32;
         });
 
         Ok(analysed_demo)
