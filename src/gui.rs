@@ -30,6 +30,7 @@ pub enum View {
     Settings,
     Records,
     Demos,
+    AnalysedDemo(usize),
     Replay,
 }
 
@@ -148,7 +149,8 @@ pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
             View::Server => server::view(state),
             View::History => history::view(state),
             View::Records => records::view(state),
-            View::Demos => demos::view(state),
+            View::Demos => demos::demos_list_view(state),
+            View::AnalysedDemo(idx) => demos::analysed_demo_view(state, idx),
             View::Replay => state.replay.view(state),
             View::Settings => settings::view(state),
         }
@@ -230,4 +232,40 @@ pub fn coming_soon<'a>() -> IcedElement<'a> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+/// e.g. 123 secs = "2:03"
+#[must_use]
+pub fn format_time(seconds: u32) -> String {
+    let secs = seconds % 60;
+    let mins = (seconds / 60) % 60;
+    let hours = seconds / (60 * 60);
+    if hours == 0 {
+        format!("{mins}:{secs:02}")
+    } else {
+        format!("{hours}:{mins:02}:{secs:02}")
+    }
+}
+
+/// "less than a minute ago"
+/// "x minutes ago"
+/// "x hours ago"
+/// "x days ago"
+#[must_use]
+pub fn format_time_since(seconds: u64) -> String {
+    if seconds < 60 {
+        "less than a minute ago".to_string()
+    } else if seconds == 60 {
+        String::from("1 minute ago")
+    } else if seconds < 60 * 60 {
+        format!("{} minutes ago", seconds / 60)
+    } else if seconds < 60 * 60 * 2 {
+        String::from("1 hour ago")
+    } else if seconds < 60 * 60 * 24 {
+        format!("{} hours ago", seconds / (60 * 60))
+    } else if seconds < 60 * 60 * 24 * 2 {
+        String::from("1 day ago")
+    } else {
+        format!("{} days ago", seconds / (60 * 60 * 24))
+    }
 }

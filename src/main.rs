@@ -1,4 +1,6 @@
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
 #![allow(clippy::redundant_pub_crate)]
 
 use std::{
@@ -149,6 +151,7 @@ pub enum Message {
     SetView(View),
     SelectPlayer(SteamID),
     UnselectPlayer,
+    SetReplay(PathBuf),
     /// Toggle whether the chat and killfeed section on the right should be shown
     ToggleChatKillfeed,
 
@@ -370,6 +373,7 @@ impl Application for App {
             }
             Message::CopyToClipboard(contents) => return iced::clipboard::write(contents),
             Message::Open(to_open) => {
+                println!("Opening '{to_open}'");
                 if let Err(e) = open::that(&*to_open) {
                     tracing::error!("Failed to open {}: {:?}", to_open, e);
                 }
@@ -434,6 +438,10 @@ impl Application for App {
             Message::Demos(msg) => {
                 return DemosState::handle_message(self, msg);
             },
+            Message::SetReplay(path) => {
+                self.view = View::Replay;
+                return self.replay.handle_message(ReplayMessage::SetDemoPath(path), &self.mac);
+            }
         };
 
         iced::Command::none()

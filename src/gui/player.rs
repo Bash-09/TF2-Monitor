@@ -11,7 +11,7 @@ use tf2_monitor_core::{
 };
 
 use super::{
-    copy_button,
+    copy_button, format_time,
     icons::{self, icon},
     open_profile_button,
     styles::colours,
@@ -343,15 +343,7 @@ pub fn row<'a>(state: &'a App, game_info: &'a GameInfo, player: SteamID) -> Iced
     contents = contents.push(badges(state, player, Some(game_info)));
 
     // Time
-    let hours = game_info.time / (60 * 60);
-    let minutes = game_info.time % (60 * 60) / 60;
-    let seconds = game_info.time % 60;
-
-    let time = if hours == 0 {
-        format!("{minutes:02}:{seconds:02}")
-    } else {
-        format!("{hours}:{minutes:02}:{seconds:02}")
-    };
+    let time = format_time(game_info.time);
 
     contents = contents.push(widget::text(time).size(FONT_SIZE));
     contents = contents.push(widget::Space::with_width(5));

@@ -9,20 +9,37 @@ use std::{
 };
 
 use iced::{
-    widget::{self, Scrollable},
+    widget::{self, scrollable::Properties, Scrollable},
     Length,
 };
-use tf2_monitor_core::demo_analyser::{self, AnalysedDemo};
+use tf2_monitor_core::{
+    demo_analyser::{self, AnalysedDemo},
+    steamid_ng::SteamID,
+    tf_demo_parser::demo::parser::analyser::Class,
+};
 use threadpool::ThreadPool;
 use tokio::{io::AsyncReadExt, task::JoinSet};
 
 use crate::{App, IcedElement, Message};
 
 use super::{
+    format_time, format_time_since,
     icons::{self, icon},
     styles::colours,
-    tooltip, FONT_SIZE, PFP_SMALL_SIZE,
+    tooltip, View, FONT_SIZE, PFP_SMALL_SIZE,
 };
+
+const CLASSES: [Class; 9] = [
+    Class::Scout,
+    Class::Sniper,
+    Class::Soldier,
+    Class::Demoman,
+    Class::Medic,
+    Class::Heavy,
+    Class::Pyro,
+    Class::Spy,
+    Class::Engineer,
+];
 
 pub type AnalysedDemoID = u64;
 type TokioReceiver<T> = tokio::sync::mpsc::UnboundedReceiver<T>;
@@ -153,7 +170,13 @@ impl DemosState {
                 }
             }
             DemosMessage::AnalyseAll => {
-                for d in &state.demos.demo_files {
+                for d in state
+                    .demos
+                    .demos_to_display
+                    .iter()
+                    .copied()
+                    .filter_map(|i| state.demos.demo_files.get(i))
+                {
                     if state.demos.analysed_demos.contains_key(&d.analysed)
                         || state.demos.analysing_demos.contains(&d.path)
                     {
@@ -260,7 +283,8 @@ impl Default for DemosState {
     }
 }
 
-pub fn view(state: &App) -> IcedElement<'_> {
+#[allow(clippy::module_name_repetitions)]
+pub fn demos_list_view(state: &App) -> IcedElement<'_> {
     // Pages
     let num_pages = state.demos.demo_files.len() / state.demos.demos_per_page + 1;
     let displaying_start =
@@ -308,13 +332,12 @@ pub fn view(state: &App) -> IcedElement<'_> {
     // Actual demos
     let mut contents = widget::column![].spacing(3).padding(15);
 
-    for d in state
+    for &d in state
         .demos
         .demos_to_display
         .iter()
         .skip(state.demos.page * state.demos.demos_per_page)
         .take(state.demos.demos_per_page)
-        .filter_map(|idx| state.demos.demo_files.get(*idx))
     {
         contents = contents.push(row(state, d));
     }
@@ -333,26 +356,16 @@ pub fn view(state: &App) -> IcedElement<'_> {
 
 #[must_use]
 #[allow(clippy::too_many_lines)]
-fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
+fn row(state: &App, demo_index: usize) -> IcedElement<'_> {
+    let Some(demo) = state.demos.demo_files.get(demo_index) else {
+        return widget::row![widget::text("Invalid demo")].into();
+    };
+
     let recorded_ago = SystemTime::now()
         .duration_since(demo.created)
         .unwrap_or_default();
 
-    let recorded_ago_str = if recorded_ago.as_secs() < 60 {
-        "Less than a minute ago".to_string()
-    } else if recorded_ago.as_secs() == 60 {
-        String::from("1 minute ago")
-    } else if recorded_ago.as_secs() < 60 * 60 {
-        format!("{} minutes ago", recorded_ago.as_secs() / 60)
-    } else if recorded_ago.as_secs() == 60 * 60 {
-        String::from("1 hour ago")
-    } else if recorded_ago.as_secs() < 60 * 60 * 24 {
-        format!("{} hours ago", recorded_ago.as_secs() / (60 * 60))
-    } else if recorded_ago.as_secs() == 60 * 60 * 24 {
-        String::from("1 day ago")
-    } else {
-        format!("{} days ago", recorded_ago.as_secs() / (60 * 60 * 24))
-    };
+    let recorded_ago_str = format_time_since(recorded_ago.as_secs());
 
     let mut contents = widget::row![]
         .align_items(iced::Alignment::Center)
@@ -377,8 +390,11 @@ fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
             analysed.header.map.clone()
         };
 
-        contents = contents
-            .push(widget::row![widget::button(widget::text(hostname).size(FONT_SIZE))].width(200));
+        contents = contents.push(
+            widget::row![widget::button(widget::text(hostname).size(FONT_SIZE))
+                .on_press(Message::SetView(View::AnalysedDemo(demo_index)))]
+            .width(200),
+        );
         contents = contents.push(widget::text(recorded_ago_str).width(100));
         contents = contents.push(widget::text(map).width(Length::FillPortion(4)));
 
@@ -403,14 +419,7 @@ fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
 
             for &c in player.most_played_classes.iter().take(3) {
                 let details = &player.class_details[c as usize];
-                let secs = details.time % 60;
-                let mins = (details.time / 60) % 60;
-                let hours = details.time / (60 * 60);
-                let time_played = if hours == 0 {
-                    format!("{mins}:{secs:02}")
-                } else {
-                    format!("{hours}:{mins:02}:{secs:02}")
-                };
+                let time_played = format_time(details.time);
 
                 badges = badges.push(tooltip(
                     icon(icons::CLASS[c as usize]).style(colours::orange()),
@@ -436,15 +445,7 @@ fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
         // <Player> on <Server> (<map>) for <time>
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let duration = analysed.header.duration as u32;
-        let secs = duration % 60;
-        let mins = (duration / 60) % 60;
-        let hours = duration / (60 * 60);
-
-        let duration = if hours > 0 {
-            format!("{hours}:{mins:02}:{secs:02}")
-        } else {
-            format!("{mins}:{secs:02}")
-        };
+        let duration = format_time(duration);
 
         contents = contents.push(
             widget::column![widget::text(duration)]
@@ -471,5 +472,179 @@ fn row<'a>(state: &'a App, demo: &'a Demo) -> IcedElement<'a> {
     }
 
     // widget::column![top_row, bottom_row]
+    contents.width(Length::Fill).into()
+}
+
+#[allow(clippy::too_many_lines)]
+pub fn analysed_demo_view(state: &App, demo_index: usize) -> IcedElement<'_> {
+    let Some(demo) = state.demos.demo_files.get(demo_index) else {
+        return widget::column![
+            widget::vertical_space(),
+            widget::text("Invalid demo"),
+            widget::vertical_space()
+        ]
+        .width(Length::Fill)
+        .align_items(iced::Alignment::Center)
+        .into();
+    };
+
+    let demo_name_button = tooltip(
+        widget::button(widget::text(&demo.name).size(FONT_SIZE)).on_press(
+            Message::CopyToClipboard(demo.path.to_string_lossy().to_string()),
+        ),
+        widget::text("Copy file path"),
+    );
+
+    let mut open_folder_button = widget::button("Open folder");
+    if let Some(path) = demo.path.parent().and_then(|p| p.to_str()) {
+        open_folder_button = open_folder_button.on_press(Message::Open(path.to_string()));
+    }
+
+    // Demo name, size, buttons
+    let mut contents = widget::column![
+        widget::Space::with_height(0),
+        widget::row![
+            widget::Space::with_width(0),
+            demo_name_button,
+            widget::text(format!("{:.2} MB", demo.file_size as f32 / 1_000_000.0)),
+            widget::horizontal_space(),
+            widget::text(format!(
+                "Created {}",
+                format_time_since(
+                    SystemTime::now()
+                        .duration_since(demo.created)
+                        .unwrap_or_default()
+                        .as_secs()
+                )
+            )),
+            open_folder_button,
+            widget::button("Create replay").on_press(Message::SetReplay(demo.path.clone())),
+            widget::Space::with_width(0),
+        ]
+        .align_items(iced::Alignment::Center)
+        .spacing(15)
+    ]
+    .width(Length::Fill)
+    .spacing(15);
+
+    let Some(analysed) = state.demos.analysed_demos.get(&demo.analysed) else {
+        contents = contents.push(widget::text("Demo not analysed"));
+        return contents.into();
+    };
+
+    // Server name, IP, duration
+    contents = contents.push(
+        widget::row![
+            widget::Space::with_width(0),
+            widget::text(&analysed.server_name),
+            widget::Space::with_width(10),
+            widget::text(format!("({})", analysed.header.server)),
+            widget::horizontal_space(),
+            widget::text(format_time(analysed.header.duration as u32)),
+            widget::Space::with_width(0),
+        ]
+        .align_items(iced::Alignment::Center)
+        .spacing(15),
+    );
+
+    // Players heading
+    let mut player_classes_heading = widget::row![
+        widget::Space::with_width(0),
+        widget::text("Player").width(150),
+        widget::text("Total").width(Length::FillPortion(1)),
+    ]
+    .spacing(15)
+    .align_items(iced::Alignment::Center);
+
+    for c in CLASSES {
+        player_classes_heading = player_classes_heading.push(tooltip(
+            icon(icons::CLASS[c as usize])
+                .width(Length::FillPortion(1))
+                .style(colours::orange()),
+            widget::text(format!("{c:?}")),
+        ));
+    }
+    player_classes_heading = player_classes_heading.push(widget::Space::with_width(15));
+
+    contents = contents.push(player_classes_heading);
+
+    // Player list
+    let mut player_list = widget::column![].spacing(5);
+    player_list = player_list.push(player_row(analysed, analysed.user));
+    for s in analysed
+        .players
+        .keys()
+        .copied()
+        .filter(|s| *s != analysed.user)
+    {
+        player_list = player_list.push(player_row(analysed, s));
+    }
+
+    contents = contents.push(widget::scrollable(player_list).direction(
+        widget::scrollable::Direction::Vertical(Properties::default()),
+    ));
+    contents = contents.push(widget::Space::with_height(15));
+
+    contents.into()
+}
+
+fn player_row(analysed: &AnalysedDemo, steamid: SteamID) -> IcedElement<'_> {
+    let Some(player) = analysed.players.get(&steamid) else {
+        return widget::row![widget::text("Invalid Player")]
+            .height(PFP_SMALL_SIZE)
+            .align_items(iced::Alignment::Center)
+            .into();
+    };
+
+    let format_kda = |kills, deaths, assists| {
+        widget::row![
+            widget::text(kills).style(colours::green()).size(FONT_SIZE),
+            widget::text(" / ").size(FONT_SIZE),
+            widget::text(deaths).style(colours::red()).size(FONT_SIZE),
+            widget::text(" / ").size(FONT_SIZE),
+            widget::text(assists)
+                .style(colours::team_blu())
+                .size(FONT_SIZE),
+        ]
+    };
+
+    let mut contents = widget::row![
+        widget::Space::with_width(0),
+        widget::column![widget::button(widget::text(&player.name).size(FONT_SIZE))
+            .on_press(Message::SelectPlayer(steamid))]
+        .width(150),
+        widget::column![
+            widget::text(format_time(player.time)).size(FONT_SIZE),
+            format_kda(
+                player.kills.len() as u32,
+                player.deaths.len() as u32,
+                player.assists.len() as u32
+            ),
+        ]
+        .align_items(iced::Alignment::Center)
+        .width(Length::FillPortion(1))
+    ]
+    .spacing(15)
+    .align_items(iced::Alignment::Center);
+
+    for c in CLASSES {
+        let details = &player.class_details[c as usize];
+
+        if details.time == 0 {
+            contents = contents.push(widget::column![].width(Length::FillPortion(1)));
+            continue;
+        }
+
+        contents = contents.push(
+            widget::column![
+                widget::text(format_time(details.time)).size(FONT_SIZE),
+                format_kda(details.num_kills, details.num_deaths, details.num_assists),
+            ]
+            .align_items(iced::Alignment::Center)
+            .width(Length::FillPortion(1)),
+        );
+    }
+    contents = contents.push(widget::Space::with_width(15));
+
     contents.width(Length::Fill).into()
 }
