@@ -7,11 +7,12 @@ use std::{
     any::TypeId, cell::RefCell, collections::{HashMap, HashSet}, io::Cursor, path::PathBuf, time::Duration
 };
 use bytes::Bytes;
+use demos::{DemosMessage, DemosState};
 use replay::{ReplayMessage, ReplayState};
 use tf2_monitor_core::{
     console::ConsoleLog, demo::DemoWatcher, demo_analyser::AnalysedDemo, event_loop::{self, define_events, EventLoop, MessageSource}, masterbase, player::Players, player_records::{PlayerRecords, Verdict}, server::Server, settings::{AppDetails, Settings}, state::MonitorState, steamid_ng::SteamID
 };
-use gui::{chat, demos::{DemosMessage, DemosState}, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
+use gui::{chat, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -42,6 +43,7 @@ use tf2_monitor_core::{
 pub mod gui;
 pub mod settings;
 pub mod replay;
+pub mod demos;
 mod tracing_setup;
 
 pub const APP: AppDetails<'static> = AppDetails {
@@ -373,7 +375,6 @@ impl Application for App {
             }
             Message::CopyToClipboard(contents) => return iced::clipboard::write(contents),
             Message::Open(to_open) => {
-                println!("Opening '{to_open}'");
                 if let Err(e) = open::that(&*to_open) {
                     tracing::error!("Failed to open {}: {:?}", to_open, e);
                 }
