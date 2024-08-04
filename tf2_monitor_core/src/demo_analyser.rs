@@ -1,8 +1,7 @@
 use std::{
     collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
     path::Path,
-    time::SystemTime,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use bitbuffer::{BitError, BitRead};
@@ -377,7 +376,7 @@ impl AnalysedDemo {
 /// # Errors
 /// If the created time or header bytes could not be read from the provided file
 #[allow(clippy::future_not_send)]
-pub async fn hash_demo_file(demo_file: impl AsRef<Path>) -> Result<u64, std::io::Error> {
+pub async fn hash_demo_file(demo_file: impl AsRef<Path>) -> Result<md5::Digest, std::io::Error> {
     let mut demo_file = tokio::fs::File::open(demo_file).await?;
     let demo_meta = demo_file.metadata().await?;
     let created = demo_meta.created()?;
@@ -389,9 +388,15 @@ pub async fn hash_demo_file(demo_file: impl AsRef<Path>) -> Result<u64, std::io:
 
 /// Takes a hash of the header and created time of a demo
 #[must_use]
-pub fn hash_demo(demo_bytes: &[u8], created: SystemTime) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    created.hash(&mut hasher);
-    demo_bytes[..demo_bytes.len().min(0x430)].hash(&mut hasher);
-    hasher.finish()
+pub fn hash_demo(demo_bytes: &[u8], created: SystemTime) -> md5::Digest {
+    let time = created
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .to_le_bytes();
+
+    let mut ctx = md5::Context::new();
+    ctx.consume(&demo_bytes[0..demo_bytes.len().min(0x430)]);
+    ctx.consume(time);
+    ctx.compute()
 }

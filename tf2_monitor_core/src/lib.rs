@@ -142,6 +142,7 @@ pub mod web;
 pub use bitbuffer;
 pub use clap;
 pub use event_loop;
+pub use md5;
 pub use rcon;
 pub use serde_json;
 pub use steamid_ng;
