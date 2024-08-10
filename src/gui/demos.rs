@@ -52,6 +52,8 @@ pub fn demos_list_view(state: &App) -> IcedElement<'_> {
         ),
         arrow_button(">>").on_press(DemosMessage::SetPage(num_pages - 1).into()),
         widget::Space::with_width(Length::FillPortion(1)),
+        widget::button(widget::text("Refresh")).on_press(DemosMessage::Refresh.into()),
+        widget::Space::with_width(15),
         widget::button(widget::text("Analyse all")).on_press(DemosMessage::AnalyseAll.into()),
         widget::Space::with_width(Length::FillPortion(1)),
         widget::text(format!(
@@ -304,7 +306,7 @@ pub fn analysed_demo_view(state: &App, demo_index: usize) -> IcedElement<'_> {
     contents = contents.push(player_classes_heading);
 
     // Player list
-    let mut player_list = widget::column![].spacing(5);
+    let mut player_list = widget::column![].spacing(2);
     player_list = player_list.push(player_row(analysed, analysed.user));
     for s in analysed
         .players
@@ -312,12 +314,15 @@ pub fn analysed_demo_view(state: &App, demo_index: usize) -> IcedElement<'_> {
         .copied()
         .filter(|s| *s != analysed.user)
     {
+        player_list = player_list.push(widget::horizontal_rule(1));
         player_list = player_list.push(player_row(analysed, s));
     }
 
-    contents = contents.push(widget::scrollable(player_list).direction(
-        widget::scrollable::Direction::Vertical(Properties::default()),
-    ));
+    contents = contents.push(
+        widget::scrollable(widget::row![widget::Space::with_width(15), player_list]).direction(
+            widget::scrollable::Direction::Vertical(Properties::default()),
+        ),
+    );
     contents = contents.push(widget::Space::with_height(15));
 
     contents.into()
@@ -344,7 +349,6 @@ fn player_row(analysed: &AnalysedDemo, steamid: SteamID) -> IcedElement<'_> {
     };
 
     let mut contents = widget::row![
-        widget::Space::with_width(0),
         widget::column![widget::button(widget::text(&player.name).size(FONT_SIZE))
             .on_press(Message::SelectPlayer(steamid))]
         .width(150),

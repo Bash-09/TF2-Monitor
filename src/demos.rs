@@ -281,7 +281,7 @@ fn spawn_demo_analyser_thread() -> (Sender<PathBuf>, UnboundedReceiver<AnalysedD
 
     // Spawn analyser thread
     std::thread::spawn(move || {
-        let pool = ThreadPool::new(num_cpus::get());
+        let pool = ThreadPool::new(num_cpus::get().saturating_sub(2).max(1));
 
         while let Ok(demo_path) = request_rx.recv() {
             tracing::debug!("Received request to analyse {demo_path:?}");
