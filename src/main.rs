@@ -244,7 +244,7 @@ impl Application for App {
     }
 
     fn theme(&self) -> iced::Theme {
-        iced::Theme::Dark
+        iced::Theme::CatppuccinMocha
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
