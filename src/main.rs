@@ -490,6 +490,8 @@ impl App {
     }
 
     fn update_displayed_records(&mut self) {
+        let steamid = SteamID::try_from(self.record_search.as_str()).ok();
+
         self.records_to_display = self
             .mac
             .players
@@ -509,7 +511,7 @@ impl App {
                     .any(|n| n.contains(&self.record_search))
 
                     // Steamid
-                    || self.record_search.parse::<u64>().is_ok_and(|_| {
+                    || steamid.is_some_and(|_| {
                         format!("{}", u64::from(*s)).contains(&self.record_search)
                     })
 
@@ -538,6 +540,19 @@ impl App {
                 .expect("Only existing records should be in this list")
                 .modified()
         });
+
+        // If exact steamid, put it at the top of the list (even if there isn't a record for it)
+        if let Some(steamid) = steamid {
+            #[allow(clippy::unreadable_literal)]
+            if u64::from(steamid) >= 76561197960265728 {
+                if let Some(i) = self.records_to_display.iter().position(|s| *s == steamid) {
+                    self.records_to_display.remove(i);
+                }
+
+                self.records_to_display.push(steamid);
+            }
+        }
+        
         self.records_to_display.reverse();
     }
 
