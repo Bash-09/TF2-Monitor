@@ -150,6 +150,7 @@ pub enum Message {
     PfpLookupResponse(String, Result<Bytes, ()>),
     ProfileLookupRequest(SteamID),
 
+    SetTheme(iced::Theme),
     SetView(View),
     SelectPlayer(SteamID),
     UnselectPlayer,
@@ -244,7 +245,7 @@ impl Application for App {
     }
 
     fn theme(&self) -> iced::Theme {
-        iced::Theme::CatppuccinMocha
+        self.settings.theme.clone()
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
@@ -443,6 +444,9 @@ impl Application for App {
                 self.view = View::Replay;
                 return self.replay.handle_message(ReplayMessage::SetDemoPath(path), &self.mac);
             }
+            Message::SetTheme(theme) => {
+                self.settings.theme = theme;
+            },
         };
 
         iced::Command::none()
@@ -761,7 +765,9 @@ fn main() {
         .settings
         .external
         .get(SETTINGS_IDENTIFIER)
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .and_then(|v| serde_json::from_value(v.clone()).map_err(|e| {
+            tracing::error!("Failed to deserialize app settings: {e}");
+        }).ok())
         .unwrap_or_default();
 
     let event_loop = EventLoop::new()

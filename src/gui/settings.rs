@@ -7,7 +7,7 @@ use tf2_monitor_core::{
     settings::FriendsAPIUsage,
 };
 
-use crate::{gui::tooltip, App, IcedElement, Message, MonitorMessage};
+use crate::{gui::tooltip, settings::THEMES, App, IcedElement, Message, MonitorMessage};
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
@@ -33,8 +33,22 @@ pub fn view(state: &App) -> IcedElement<'_> {
 
     Scrollable::new(
 
-            // RCON
         widget::column![
+            // UI
+            heading("UI"),
+            widget::row![
+                widget::row![
+                    tooltip(
+                        widget::text("Theme"),
+                        widget::text("The colours of the application"),
+                    )
+                ].width(HALF_WIDTH),
+                widget::row![
+                    widget::PickList::new(THEMES, Some(state.settings.theme.clone()),Message::SetTheme)
+                ].width(HALF_WIDTH).padding(5),
+            ],
+            
+            // RCON
             heading("Rcon"),
 
             // Rcon password
