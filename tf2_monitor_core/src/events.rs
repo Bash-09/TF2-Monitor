@@ -91,6 +91,7 @@ pub struct InternalPreferences {
     pub masterbase_host: Option<String>,
     pub rcon_port: Option<u16>,
     pub dumb_autokick: Option<bool>,
+    pub request_playtime: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -126,6 +127,10 @@ impl Message<MonitorState> for Preferences {
             }
             if let Some(autokick) = internal.dumb_autokick {
                 state.settings.autokick_bots = autokick;
+            }
+
+            if let Some(request_playtime) = internal.request_playtime {
+                state.settings.request_playtime = request_playtime;
             }
         }
 

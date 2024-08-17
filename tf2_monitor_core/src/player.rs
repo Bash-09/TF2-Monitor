@@ -546,6 +546,7 @@ pub struct SteamInfo {
     pub vac_bans: u32,
     pub game_bans: u32,
     pub days_since_last_ban: Option<u32>,
+    pub playtime: Option<u64>,
     pub fetched: DateTime<Utc>,
 }
 

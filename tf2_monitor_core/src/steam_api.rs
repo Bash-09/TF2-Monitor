@@ -1,14 +1,17 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use chrono::Utc;
 use event_loop::{try_get, Handled, Is, Message, MessageHandler};
 use steam_rs::{
-    player_service::get_owned_games,
     steam_user::{get_friend_list, get_player_bans, get_player_summaries},
     Steam,
 };
 use steamid_ng::SteamID;
 use thiserror::Error;
+use tokio::task::JoinSet;
 
 use super::new_players::NewPlayers;
 use crate::{
@@ -145,6 +148,7 @@ where
                     masterbase_host: _,
                     rcon_port: _,
                     dumb_autokick: _,
+                    request_playtime: _,
                 }),
             external: _,
         }) = try_get(message)
@@ -201,9 +205,13 @@ where
 
             self.in_progress.extend_from_slice(&batch);
 
-            let client = Steam::new(&state.settings.steam_api_key);
+            let client = Arc::new(Steam::new(&state.settings.steam_api_key));
+            let request_playtime = state.settings.request_playtime;
             return Handled::future(async move {
-                Some(ProfileLookupResult(request_steam_info(&client, &batch).await).into())
+                Some(
+                    ProfileLookupResult(request_steam_info(client, &batch, request_playtime).await)
+                        .into(),
+                )
             });
         }
 
@@ -443,13 +451,39 @@ where
 /// Individual elements in the Vec may be `Err` if specific accounts were not
 /// found or failed to parse.
 pub async fn request_steam_info(
-    client: &Steam,
+    client: Arc<Steam>,
     playerids: &[SteamID],
+    include_playtime: bool,
 ) -> Result<Vec<(SteamID, Result<SteamInfo, SteamAPIError>)>, SteamAPIError> {
     tracing::debug!("Requesting steam accounts: {:?}", playerids);
 
-    let summaries = request_player_summary(client, playerids).await?;
-    let bans = request_account_bans(client, playerids).await?;
+    let summaries = request_player_summary(&client, playerids).await?;
+    let bans = request_account_bans(&client, playerids).await?;
+
+    let playtimes = if include_playtime && !playerids.is_empty() {
+        let mut join_handles: JoinSet<(SteamID, Result<u64, SteamAPIError>)> = JoinSet::new();
+
+        for p in playerids {
+            let client = client.clone();
+            let p = *p;
+            join_handles.spawn(async move {
+                let playtime = request_game_playtime(&client, p).await;
+                (p, playtime)
+            });
+        }
+
+        let mut playtimes = Vec::new();
+        while let Some(playtime) = join_handles.join_next().await {
+            let Ok(playtime) = playtime else {
+                continue;
+            };
+            playtimes.push(playtime);
+        }
+
+        playtimes
+    } else {
+        Vec::new()
+    };
 
     let id_to_summary: HashMap<_, _> = summaries
         .into_iter()
@@ -458,6 +492,10 @@ pub async fn request_steam_info(
     let id_to_ban: HashMap<_, _> = bans
         .into_iter()
         .map(|ban| (ban.steam_id.clone(), ban))
+        .collect();
+    let id_to_playtime: HashMap<_, _> = playtimes
+        .into_iter()
+        .filter_map(|(s, r)| r.ok().map(|r| (s, r)))
         .collect();
 
     Ok(playerids
@@ -489,6 +527,7 @@ pub async fn request_steam_info(
                     } else {
                         None
                     },
+                    playtime: id_to_playtime.get(&player).copied(),
                     fetched: Utc::now(),
                 };
                 Ok(steam_info)
@@ -550,10 +589,7 @@ async fn request_account_bans(
     Ok(bans)
 }
 
-async fn request_game_info(
-    client: &Steam,
-    player: SteamID,
-) -> Result<get_owned_games::Game, SteamAPIError> {
+async fn request_game_playtime(client: &Steam, player: SteamID) -> Result<u64, SteamAPIError> {
     let steamid = steam_rs::steam_id::SteamId::new(u64::from(player));
     let game = client
         .get_owned_games(
@@ -571,5 +607,6 @@ async fn request_game_info(
         .into_iter()
         .find(|g| g.appid == TF2_GAME_ID);
 
-    game.ok_or(SteamAPIError::GameNotOwned)
+    game.map(|g| g.playtime_forever)
+        .ok_or(SteamAPIError::GameNotOwned)
 }

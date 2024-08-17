@@ -195,8 +195,14 @@ impl WebAPIHandler {
         let out = Handled::multiple(request.waiting_users.chunks(100).map(|accounts| {
             let accounts = accounts.to_vec();
             let client = client.clone();
+            let request_playtime = state.settings.request_playtime;
             Handled::future(async move {
-                Some(ProfileLookupResult(request_steam_info(&client, &accounts).await).into())
+                Some(
+                    ProfileLookupResult(
+                        request_steam_info(client, &accounts, request_playtime).await,
+                    )
+                    .into(),
+                )
             })
         }));
 
@@ -569,6 +575,7 @@ fn get_prefs_response(state: &MonitorState) -> String {
     let prefs = Preferences {
         internal: Some(InternalPreferences {
             friends_api_usage: Some(settings.friends_api_usage),
+            request_playtime: Some(settings.request_playtime),
             tf2_directory: settings
                 .tf2_directory
                 .as_ref()
