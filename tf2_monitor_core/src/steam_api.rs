@@ -2,19 +2,18 @@ use std::collections::{HashMap, VecDeque};
 
 use chrono::Utc;
 use event_loop::{try_get, Handled, Is, Message, MessageHandler};
-use steamid_ng::SteamID;
-use tappet::{
-    response_types::{
-        GetFriendListResponseBase, GetPlayerBansResponseBase, GetPlayerSummariesResponseBase,
-        PlayerBans, PlayerSummary,
-    },
-    Executor, SteamAPI,
+use steam_rs::{
+    player_service::get_owned_games,
+    steam_user::{get_friend_list, get_player_bans, get_player_summaries},
+    Steam,
 };
+use steamid_ng::SteamID;
 use thiserror::Error;
 
 use super::new_players::NewPlayers;
 use crate::{
     events::{InternalPreferences, Preferences, UserUpdates},
+    gamefinder::TF2_GAME_ID,
     player::{Friend, SteamInfo},
     player_records::{PlayerRecord, Verdict},
     settings::FriendsAPIUsage,
@@ -32,7 +31,11 @@ pub enum SteamAPIError {
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
-    Tappet(#[from] tappet::errors::SteamAPIError),
+    SteamAPIPlayerService(#[from] steam_rs::errors::PlayerServiceError),
+    #[error(transparent)]
+    SteamAPIUser(#[from] steam_rs::errors::SteamUserError),
+    #[error("Player does not own TF2")]
+    GameNotOwned,
 }
 
 // Messages *************************
@@ -191,7 +194,6 @@ where
                 return Handled::none();
             }
 
-            let key = state.settings.steam_api_key.clone();
             let batch: Vec<_> = self
                 .batch_buffer
                 .drain(0..BATCH_SIZE.min(self.batch_buffer.len()))
@@ -199,8 +201,8 @@ where
 
             self.in_progress.extend_from_slice(&batch);
 
+            let client = Steam::new(&state.settings.steam_api_key);
             return Handled::future(async move {
-                let client = SteamAPI::new(key);
                 Some(ProfileLookupResult(request_steam_info(&client, &batch).await).into())
             });
         }
@@ -228,9 +230,8 @@ impl LookupFriends {
     ) -> Option<Handled<M>> {
         Handled::multiple(players.into_iter().map(|&p| {
             self.in_progess.push(p);
-            let key = key.to_owned();
+            let client = Steam::new(key);
             Handled::future(async move {
-                let client = SteamAPI::new(key);
                 Some(
                     FriendLookupResult {
                         steamid: p,
@@ -442,7 +443,7 @@ where
 /// Individual elements in the Vec may be `Err` if specific accounts were not
 /// found or failed to parse.
 pub async fn request_steam_info(
-    client: &SteamAPI,
+    client: &Steam,
     playerids: &[SteamID],
 ) -> Result<Vec<(SteamID, Result<SteamInfo, SteamAPIError>)>, SteamAPIError> {
     tracing::debug!("Requesting steam accounts: {:?}", playerids);
@@ -452,7 +453,7 @@ pub async fn request_steam_info(
 
     let id_to_summary: HashMap<_, _> = summaries
         .into_iter()
-        .map(|summary| (summary.steamid.clone(), summary))
+        .map(|summary| (format!("{}", summary.steam_id.into_u64()), summary))
         .collect();
     let id_to_ban: HashMap<_, _> = bans
         .into_iter()
@@ -472,13 +473,13 @@ pub async fn request_steam_info(
                     .get(&id)
                     .ok_or(SteamAPIError::MissingBans(player))?;
                 let steam_info = SteamInfo {
-                    account_name: summary.personaname.clone(),
-                    pfp_url: summary.avatarfull.clone(),
-                    profile_url: summary.profileurl.clone(),
-                    pfp_hash: summary.avatarhash.clone(),
-                    profile_visibility: summary.communityvisibilitystate.into(),
-                    time_created: summary.timecreated,
-                    country_code: summary.loccountrycode.clone().map(Into::into),
+                    account_name: summary.persona_name.clone(),
+                    pfp_url: summary.avatar_full.clone(),
+                    profile_url: summary.profile_url.clone(),
+                    pfp_hash: summary.avatar_hash.clone(),
+                    profile_visibility: summary.community_visibility_state.into(),
+                    time_created: summary.time_created,
+                    country_code: summary.loc_country_code.clone().map(Into::into),
                     vac_bans: ban.number_of_vac_bans,
                     game_bans: ban.number_of_game_bans,
                     days_since_last_ban: if ban.number_of_vac_bans > 0
@@ -499,72 +500,76 @@ pub async fn request_steam_info(
 }
 
 async fn request_player_summary(
-    client: &SteamAPI,
+    client: &Steam,
     players: &[SteamID],
-) -> Result<Vec<PlayerSummary>, SteamAPIError> {
-    let summaries = client
-        .get()
-        .ISteamUser()
-        .GetPlayerSummaries(
-            players
-                .iter()
-                .map(|player| format!("{}", u64::from(*player)))
-                .collect(),
-        )
-        .execute()
-        .await?;
-    let summaries = serde_json::from_str::<GetPlayerSummariesResponseBase>(&summaries)?;
-    Ok(summaries.response.players)
+) -> Result<Vec<get_player_summaries::Player>, SteamAPIError> {
+    let steamids = players
+        .iter()
+        .map(|s| steam_rs::steam_id::SteamId::new(u64::from(*s)))
+        .collect();
+    Ok(client.get_player_summaries(steamids).await?)
 }
 
 /// # Errors
 /// If the API request failed, the account does not expose their friends list,
 /// or the account does not exist.
 pub async fn request_account_friends(
-    client: &SteamAPI,
+    client: &Steam,
     player: SteamID,
 ) -> Result<Vec<Friend>, SteamAPIError> {
     tracing::debug!(
         "Requesting friends list from Steam API for {}",
         u64::from(player)
     );
+    let steamid = steam_rs::steam_id::SteamId::new(u64::from(player));
     let friends = client
-        .get()
-        .ISteamUser()
-        .GetFriendList(player.into(), "all".to_string())
-        .execute()
+        .get_friend_list(steamid, Some(get_friend_list::Relationship::All))
         .await?;
-    let friends = serde_json::from_str::<GetFriendListResponseBase>(&friends)?;
+
     Ok(friends
-        .friendslist
-        .map_or(Vec::new(), |fl| fl.friends)
-        .iter()
-        .filter_map(|f| {
-            f.steamid.parse::<u64>().map_or(None, |id| {
-                Some(Friend {
-                    steamid: SteamID::from(id),
-                    friend_since: f.friend_since,
-                })
-            })
+        .into_iter()
+        .map(|f| Friend {
+            steamid: SteamID::from(f.steam_id.into_u64()),
+            #[allow(clippy::cast_lossless)]
+            friend_since: f.friend_since as u64,
         })
         .collect())
 }
 
 async fn request_account_bans(
-    client: &SteamAPI,
+    client: &Steam,
     players: &[SteamID],
-) -> Result<Vec<PlayerBans>, SteamAPIError> {
-    let bans = client
-        .get()
-        .ISteamUser()
-        .GetPlayerBans(
-            players
-                .iter()
-                .map(|player| format!("{}", u64::from(*player)))
-                .collect(),
+) -> Result<Vec<get_player_bans::Player>, SteamAPIError> {
+    let steamids = players
+        .iter()
+        .map(|s| steam_rs::steam_id::SteamId::new(u64::from(*s)))
+        .collect();
+
+    let bans = client.get_player_bans(steamids).await?;
+
+    Ok(bans)
+}
+
+async fn request_game_info(
+    client: &Steam,
+    player: SteamID,
+) -> Result<get_owned_games::Game, SteamAPIError> {
+    let steamid = steam_rs::steam_id::SteamId::new(u64::from(player));
+    let game = client
+        .get_owned_games(
+            steamid,
+            false,
+            true,
+            TF2_GAME_ID,
+            true,
+            None,
+            "english",
+            false,
         )
-        .execute()
-        .await?;
-    let bans = serde_json::from_str::<GetPlayerBansResponseBase>(&bans)?;
-    Ok(bans.players)
+        .await?
+        .games
+        .into_iter()
+        .find(|g| g.appid == TF2_GAME_ID);
+
+    game.ok_or(SteamAPIError::GameNotOwned)
 }
