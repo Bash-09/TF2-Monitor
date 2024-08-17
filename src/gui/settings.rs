@@ -60,6 +60,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
+                            request_playtime: None,
                             tf2_directory: None,
                             rcon_password: Some(s),
                             steam_api_key: None,
@@ -83,6 +84,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
+                            request_playtime: None,
                             tf2_directory: None,
                             rcon_password: None,
                             steam_api_key: None,
@@ -112,6 +114,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
+                            request_playtime: None,
                             tf2_directory: None,
                             rcon_password: None,
                             steam_api_key: Some(s),
@@ -128,12 +131,13 @@ pub fn view(state: &App) -> IcedElement<'_> {
 
             // Friend lookups
             widget::row![
-                widget::row![tooltip("Friend Lookups", "Which accounts will have their friend lists looked up via the Steam Web API. Friend lookups can only be requested on an individual account basis and may use up a larger number of API requests.")].width(HALF_WIDTH),
+                widget::row![tooltip("Friend Lookups", "Which accounts will have their friend lists looked up via the Steam Web API.\nFriend lookups can only be requested on an individual account basis and may use up a larger number of API requests.")].width(HALF_WIDTH),
                 widget::row![
                 widget::PickList::new(FRIENDS_API_USAGE_OPTIONS, Some(state.mac.settings.friends_api_usage), |v| {
                     Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: Some(v),
+                            request_playtime: None,
                             tf2_directory: None,
                             rcon_password: None,
                             steam_api_key: None,
@@ -145,6 +149,29 @@ pub fn view(state: &App) -> IcedElement<'_> {
                         external: None
                     }))
                 })].width(HALF_WIDTH).padding(5),
+            ].align_items(iced::Alignment::Center).spacing(5),
+
+            // Playtime lookups
+
+            widget::row![
+                tooltip(
+                    widget::Checkbox::new("Lookup TF2 Playtime", state.mac.settings.request_playtime)
+                        .on_toggle(|v| Message::MAC(MonitorMessage::Preferences(Preferences {
+                            internal: Some(InternalPreferences {
+                                friends_api_usage: None,
+                                request_playtime: Some(v),
+                                tf2_directory: None,
+                                rcon_password: None,
+                                steam_api_key: None,
+                                masterbase_key: None,
+                                masterbase_host: None,
+                                rcon_port: None,
+                                dumb_autokick: None,
+                            }),
+                            external: None
+                        }))),
+                    "Should steam profile lookups include their TF2 playtime?\nPlaytime lookups can only be requested on an individual account basis and may use up a larger number of API requests."
+                ),
             ].align_items(iced::Alignment::Center).spacing(5),
 
             // MASTERBASE
@@ -168,6 +195,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
+                            request_playtime: None,
                             tf2_directory: None,
                             rcon_password: None,
                             steam_api_key: None,
@@ -191,6 +219,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
                     |s| Message::MAC(MonitorMessage::Preferences(Preferences {
                         internal: Some(InternalPreferences {
                             friends_api_usage: None,
+                            request_playtime: None,
                             tf2_directory: None,
                             rcon_password: None,
                             steam_api_key: None,

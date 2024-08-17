@@ -19,8 +19,9 @@ use super::{
 };
 use crate::{App, IcedElement, Message, ALIAS_KEY, NOTES_KEY};
 
-#[allow(clippy::too_many_lines)]
-pub fn view(state: &App, player: SteamID) -> IcedElement<'_> {
+/// The large player panel to the side of the window
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+pub fn detailed_player_view(state: &App, player: SteamID) -> IcedElement<'_> {
     let mut contents = column![].spacing(7);
 
     // pfp and close buttons
@@ -172,7 +173,10 @@ pub fn view(state: &App, player: SteamID) -> IcedElement<'_> {
         ]);
 
         // Date created
-        if let Some(created) = si.time_created.and_then(|t| DateTime::from_timestamp(t, 0)) {
+        if let Some(created) = si
+            .time_created
+            .and_then(|t| DateTime::from_timestamp(t as i64, 0))
+        {
             contents = contents.push(widget::row![
                 widget::text("Created").width(Length::FillPortion(1)),
                 widget::text(format!(
@@ -226,7 +230,9 @@ pub fn view(state: &App, player: SteamID) -> IcedElement<'_> {
 
             // Days since last ban will be from when the info was last fetched, so we need to
             // add the days since fetched as well.
-            if let Some(days_since_last_ban) = si.days_since_last_ban.map(|d| d + age.num_days()) {
+            if let Some(days_since_last_ban) =
+                si.days_since_last_ban.map(|d| d + age.num_days() as u32)
+            {
                 since_last_ban = since_last_ban.push(
                     widget::text(format!("{days_since_last_ban} days since last ban."))
                         .vertical_alignment(Vertical::Center),
@@ -240,6 +246,14 @@ pub fn view(state: &App, player: SteamID) -> IcedElement<'_> {
                 ]
                 .align_items(Alignment::Center),
             );
+        }
+
+        // TF playtime
+        if let Some(playtime) = si.playtime {
+            contents = contents.push(widget::row![
+                widget::text("TF2 Playtime").width(Length::FillPortion(1)),
+                widget::text(format!("{} hour(s)", playtime / 60)).width(Length::FillPortion(1)),
+            ]);
         }
 
         // Last refreshed
@@ -418,7 +432,7 @@ pub fn badges<'a>(
         // Young account
         if let Some(created) = steam
             .time_created
-            .and_then(|t| DateTime::from_timestamp(t, 0))
+            .and_then(|t| DateTime::from_timestamp(t as i64, 0))
         {
             let days = Utc::now().signed_duration_since(created).num_days();
 

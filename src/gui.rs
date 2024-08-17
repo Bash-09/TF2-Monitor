@@ -128,7 +128,9 @@ pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
     // Right panel is either chat + killfeed or the currently selected player
     let right_panel: Option<IcedContainer<'_>> =
         match (state.selected_player, state.settings.show_chat_and_killfeed) {
-            (Some(steamid), _) => Some(widget::Container::new(player::view(state, steamid))),
+            (Some(steamid), _) => Some(widget::Container::new(player::detailed_player_view(
+                state, steamid,
+            ))),
             (None, true) => Some(widget::Container::new(column![
                 widget::Container::new(chat::view(state))
                     .width(Length::Fill)
