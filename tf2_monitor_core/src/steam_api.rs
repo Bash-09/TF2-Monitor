@@ -592,16 +592,7 @@ async fn request_account_bans(
 async fn request_game_playtime(client: &Steam, player: SteamID) -> Result<u64, SteamAPIError> {
     let steamid = steam_rs::steam_id::SteamId::new(u64::from(player));
     let game = client
-        .get_owned_games(
-            steamid,
-            false,
-            true,
-            TF2_GAME_ID,
-            true,
-            None,
-            "english",
-            false,
-        )
+        .get_owned_games(steamid, false, true, vec![TF2_GAME_ID], false)
         .await?
         .games
         .into_iter()
