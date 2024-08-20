@@ -26,7 +26,7 @@ use iced::{
 use image::{io::Reader, EncodableLayout, ImageBuffer};
 use reqwest::StatusCode;
 use serde_json::Map;
-use settings::{AppSettings, SETTINGS_IDENTIFIER};
+use settings::{AppSettings, PanelSide, SETTINGS_IDENTIFIER};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use tf2_monitor_core::{
@@ -153,6 +153,7 @@ pub enum Message {
     SetReplay(PathBuf),
     /// Toggle whether a particular sidepanel is visible 
     ToggleSidePanel(&'static [SidePanel], SidePanel),
+    SetPanelSide(PanelSide),
 
     CopyToClipboard(String),
     ChangeVerdict(SteamID, Verdict),
@@ -336,7 +337,10 @@ impl Application for App {
                 self.settings.view = v;
                 if matches!(self.settings.view, View::Records) {
                     self.update_displayed_records();
-                }
+                } 
+                if matches!(self.settings.view, View::Demos) {
+                    self.update_demo_list();
+                } 
             }
             Message::ChangeVerdict(steamid, verdict) => self.update_verdict(steamid, verdict),
             Message::ChangeNotes(steamid, notes) => self.update_notes(steamid, notes),
@@ -426,13 +430,14 @@ impl Application for App {
             },
             Message::ToggleSidePanel(available_panels, panel) => {
                 if self.selected_player.is_some() || !self.settings.sidepanels.contains(&panel) {
-                    available_panels.iter().for_each(|p| { self.settings.sidepanels.remove(p); });
+                    for p in available_panels { self.settings.sidepanels.remove(p); }
                     self.settings.sidepanels.insert(panel);
-                    self.unselect_player();
-                } else {
-                    available_panels.iter().for_each(|p| { self.settings.sidepanels.remove(p); });
+                    return self.unselect_player();
                 }
+
+                for p in available_panels { self.settings.sidepanels.remove(p); }
             }
+            Message::SetPanelSide(side) => self.settings.panel_side = side,
         };
 
         iced::Command::none()
@@ -540,6 +545,11 @@ impl App {
         }
         
         self.records.to_display.reverse();
+    }
+
+    pub fn update_demo_list(&mut self) {
+        self.demos.demos_to_display = self.settings.demo_filters.filter(self);
+        self.demos.page = self.demos.page.min(self.demos.demos_to_display.len() / self.demos.demos_per_page);
     }
 
     fn handle_mac_message(&mut self, message: MonitorMessage) -> iced::Command<Message> {

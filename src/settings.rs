@@ -2,9 +2,13 @@ use std::{collections::HashSet, fmt::Display};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::gui::{SidePanel, View};
+use crate::{
+    demos,
+    gui::{SidePanel, View},
+};
 
 pub const SETTINGS_IDENTIFIER: &str = "MACClientSettings";
+pub const PANEL_SIDES: &[PanelSide] = &[PanelSide::Left, PanelSide::Right];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -16,6 +20,7 @@ pub struct AppSettings {
     pub view: View,
     pub sidepanels: HashSet<SidePanel>,
     pub panel_side: PanelSide,
+    pub demo_filters: demos::Filters,
     #[serde(serialize_with = "serialize_theme")]
     #[serde(deserialize_with = "deserialize_theme")]
     pub theme: iced::Theme,
@@ -30,12 +35,13 @@ impl Default for AppSettings {
             view: View::Server,
             sidepanels: HashSet::new(),
             panel_side: PanelSide::Right,
+            demo_filters: demos::Filters::new(),
             theme: iced::Theme::CatppuccinMocha,
         }
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PanelSide {
     Left,
     Right,

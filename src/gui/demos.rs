@@ -7,7 +7,7 @@ use iced::{
 use tf2_monitor_core::{demo_analyser::AnalysedDemo, steamid_ng::SteamID};
 
 use crate::{
-    demos::{DemosMessage, CLASSES},
+    demos::{DemosMessage, CLASSES, SORT_DIRECTIONS, SORT_OPTIONS},
     App, IcedElement, Message,
 };
 
@@ -15,18 +15,18 @@ use super::{
     format_time, format_time_since,
     icons::{self, icon},
     styles::colours,
-    tooltip, View, FONT_SIZE, PFP_SMALL_SIZE,
+    tooltip, View, FONT_SIZE, FONT_SIZE_HEADING, PFP_SMALL_SIZE,
 };
 
 #[allow(clippy::module_name_repetitions)]
 pub fn demos_list_view(state: &App) -> IcedElement<'_> {
     // Pages
-    let num_pages = state.demos.demo_files.len() / state.demos.demos_per_page + 1;
+    let num_pages = state.demos.demos_to_display.len() / state.demos.demos_per_page + 1;
     let displaying_start =
-        (state.demos.page * state.demos.demos_per_page + 1).min(state.demos.demo_files.len());
+        (state.demos.page * state.demos.demos_per_page + 1).min(state.demos.demos_to_display.len());
     let displaying_end = if state.demos.page == num_pages - 1 {
         (num_pages - 1) * state.demos.demos_per_page
-            + state.demos.demo_files.len() % state.demos.demos_per_page
+            + state.demos.demos_to_display.len() % state.demos.demos_per_page
     } else {
         (state.demos.page + 1) * state.demos.demos_per_page
     };
@@ -39,32 +39,65 @@ pub fn demos_list_view(state: &App) -> IcedElement<'_> {
         )
     };
 
-    let header = widget::row![
-        widget::Space::with_width(15),
-        arrow_button("<<").on_press(DemosMessage::SetPage(0).into()),
-        arrow_button("<")
-            .on_press(DemosMessage::SetPage(state.demos.page.saturating_sub(1)).into()),
-        widget::column![widget::text(format!("{}", state.demos.page + 1))]
-            .align_items(iced::Alignment::Center)
-            .width(75),
-        arrow_button(">").on_press(
-            DemosMessage::SetPage(state.demos.page.saturating_add(1).min(num_pages - 1)).into()
-        ),
-        arrow_button(">>").on_press(DemosMessage::SetPage(num_pages - 1).into()),
-        widget::Space::with_width(Length::FillPortion(1)),
-        widget::button(widget::text("Refresh")).on_press(DemosMessage::Refresh.into()),
-        widget::Space::with_width(15),
-        widget::button(widget::text("Analyse all")).on_press(DemosMessage::AnalyseAll.into()),
-        widget::Space::with_width(Length::FillPortion(1)),
-        widget::text(format!(
-            "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
-            state.demos.demo_files.len(),
-            if num_pages == 1 { "page" } else { "pages" }
-        )),
-        widget::Space::with_width(15),
+    let header = widget::column![
+        widget::row![
+            arrow_button("<<").on_press(DemosMessage::SetPage(0).into()),
+            arrow_button("<")
+                .on_press(DemosMessage::SetPage(state.demos.page.saturating_sub(1)).into()),
+            widget::column![widget::text(format!("{}", state.demos.page + 1))]
+                .align_items(iced::Alignment::Center)
+                .width(75),
+            arrow_button(">").on_press(
+                DemosMessage::SetPage(state.demos.page.saturating_add(1).min(num_pages - 1)).into()
+            ),
+            arrow_button(">>").on_press(DemosMessage::SetPage(num_pages - 1).into()),
+            widget::Space::with_width(Length::FillPortion(1)),
+            widget::button(widget::text("Refresh")).on_press(DemosMessage::Refresh.into()),
+            widget::Space::with_width(5),
+            widget::button(widget::text("Analyse all")).on_press(DemosMessage::AnalyseAll.into()),
+            widget::Space::with_width(Length::FillPortion(1)),
+            widget::text(format!(
+                "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
+                state.demos.demos_to_display.len(),
+                if num_pages == 1 { "page" } else { "pages" }
+            )),
+        ]
+        .spacing(5)
+        .align_items(iced::Alignment::Center),
+        widget::row![
+            widget::text("Sort by: "),
+            // Sort by
+            widget::PickList::new(
+                SORT_OPTIONS,
+                Some(state.settings.demo_filters.sort_by),
+                |s| { DemosMessage::FilterSortBy(s).into() }
+            )
+            .text_size(FONT_SIZE),
+            // Direction
+            widget::PickList::new(
+                SORT_DIRECTIONS,
+                Some(state.settings.demo_filters.direction),
+                |s| { DemosMessage::FilterSortDirection(s).into() }
+            )
+            .text_size(FONT_SIZE),
+            widget::horizontal_space(),
+            tooltip(
+                if state.demos.demos_to_display.len() == state.demos.demo_files.len() {
+                    widget::text("All demos visible")
+                } else {
+                    widget::text(format!(
+                        "{} demos hidden",
+                        state.demos.demo_files.len() - state.demos.demos_to_display.len(),
+                    ))
+                },
+                "Refresh, check filters, or change sorting method to see more"
+            ),
+        ]
+        .spacing(5)
+        .align_items(iced::Alignment::Center)
     ]
-    .spacing(3)
-    .align_items(iced::Alignment::Center);
+    .spacing(15)
+    .padding(15);
 
     // Actual demos
     let mut contents = widget::column![].spacing(3).padding(15);
@@ -80,9 +113,7 @@ pub fn demos_list_view(state: &App) -> IcedElement<'_> {
     }
 
     widget::column![
-        widget::Space::with_height(15),
         header,
-        widget::Space::with_height(15),
         widget::horizontal_rule(1),
         Scrollable::new(contents)
     ]
@@ -138,7 +169,7 @@ fn demo_list_row(state: &App, demo_index: usize) -> IcedElement<'_> {
         let mut badges = widget::row![]
             .spacing(15)
             .align_items(iced::Alignment::Center)
-            .width(Length::FillPortion(3));
+            .width(220);
 
         if let Some(player) = analysed.players.get(&analysed.user) {
             badges = badges.push(tooltip(
@@ -187,7 +218,7 @@ fn demo_list_row(state: &App, demo_index: usize) -> IcedElement<'_> {
         contents = contents.push(
             widget::column![widget::text(duration)]
                 .align_items(iced::Alignment::End)
-                .width(65),
+                .width(70),
         );
     } else {
         let analysing = state.demos.analysing_demos.contains(&demo.path);
@@ -386,4 +417,82 @@ fn player_row(analysed: &AnalysedDemo, steamid: SteamID) -> IcedElement<'_> {
     contents = contents.push(widget::Space::with_width(15));
 
     contents.width(Length::Fill).into()
+}
+
+pub fn filters_view(state: &App) -> IcedElement<'_> {
+    let mut contents = widget::column![
+        widget::text("Filters").size(FONT_SIZE_HEADING),
+        widget::checkbox(
+            "Show analysed demos",
+            state.settings.demo_filters.show_analysed
+        )
+        .on_toggle(|v| DemosMessage::FilterShowAnalysed(v).into()),
+        widget::checkbox(
+            "Show non-analysed demos",
+            state.settings.demo_filters.show_non_analysed
+        )
+        .on_toggle(|v| DemosMessage::FilterShowNonAnalysed(v).into()),
+        widget::text("Search (Map, Server, IP, File)").size(FONT_SIZE_HEADING),
+        widget::text_input(
+            "Search (map, server, ip, file)",
+            &state.settings.demo_filters.search
+        )
+        .on_submit(Message::Demos(DemosMessage::ApplyFilters))
+        .on_input(|s| DemosMessage::FilterSearchUpdate(s).into()),
+        widget::text("Contains Players").size(FONT_SIZE_HEADING),
+        widget::row![
+            widget::text_input(
+                "Player steamid or name",
+                state
+                    .settings
+                    .demo_filters
+                    .contains_players
+                    .iter()
+                    .last()
+                    .map_or("", |s| s.as_str())
+            )
+            .on_submit(Message::Demos(DemosMessage::FilterContainsPlayerAdd))
+            .on_input(|s| DemosMessage::FilterContainsPlayerUpdate(s).into()),
+            widget::button("Add").on_press(Message::Demos(DemosMessage::FilterContainsPlayerAdd)),
+        ]
+        .spacing(15),
+    ]
+    .padding(15)
+    .spacing(15);
+
+    for (i, p) in state
+        .settings
+        .demo_filters
+        .contains_players
+        .iter()
+        .enumerate()
+        .rev()
+        .skip(1)
+    {
+        contents = contents.push(
+            widget::row![
+                widget::button(
+                    widget::column![icon(icons::MINUS)]
+                        .width(20)
+                        .align_items(iced::Alignment::Center),
+                )
+                .on_press(Message::Demos(DemosMessage::FilterRemovePlayer(i))),
+                widget::text(p),
+            ]
+            .align_items(iced::Alignment::Center)
+            .spacing(15),
+        );
+    }
+
+    contents = contents.push(
+        widget::button("Clear All Filters").on_press(Message::Demos(DemosMessage::ClearFilters)),
+    );
+
+    widget::Scrollable::new(contents)
+        .direction(widget::scrollable::Direction::Vertical(
+            Properties::default(),
+        ))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }

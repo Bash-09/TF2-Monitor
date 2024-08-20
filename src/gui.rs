@@ -8,7 +8,7 @@ use iced::{
 use serde::{Deserialize, Serialize};
 use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
 
-use crate::{App, IcedElement, Message};
+use crate::{settings::PanelSide, App, IcedElement, Message};
 
 use self::styles::picklist::VerdictPickList;
 
@@ -81,12 +81,13 @@ impl SidePanel {
         match self {
             Self::ChatKills => chat_killfeed_view(state),
             Self::Votes => coming_soon(),
-            Self::DemoFilters => coming_soon(),
+            Self::DemoFilters => demos::filters_view(state),
         }
     }
 }
 
 pub const FONT_SIZE: u16 = 13;
+pub const FONT_SIZE_HEADING: u16 = 20;
 pub const PFP_FULL_SIZE: u16 = 184;
 pub const PFP_SMALL_SIZE: u16 = 28;
 
@@ -201,11 +202,14 @@ pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
     .height(Length::Fill)];
 
     if let Some(side_panel) = side_panel {
-        content = content.push(Rule::vertical(1)).push(
-            widget::Container::new(side_panel)
-                .width(Length::FillPortion(SPLIT[1]))
-                .height(Length::Fill),
-        );
+        let panel = widget::Container::new(side_panel)
+            .width(Length::FillPortion(SPLIT[1]))
+            .height(Length::Fill);
+        if state.settings.panel_side == PanelSide::Left {
+            content = widget::row![panel, Rule::vertical(1), content,];
+        } else {
+            content = widget::row![content, Rule::vertical(1), panel,];
+        }
     }
 
     content
@@ -234,15 +238,19 @@ pub fn view_select(state: &App) -> IcedElement<'_> {
         views = views.push(button);
     }
 
-    let mut content = row![views, widget::horizontal_space()].spacing(10);
-
-    let side_panels = state.settings.view.side_panels();
-    for sp in side_panels {
-        content = content.push(
-            widget::Button::new(widget::text(format!("{sp}")))
-                .on_press(Message::ToggleSidePanel(side_panels, *sp)),
-        );
+    let mut side_panels = widget::row![].spacing(10);
+    for sp in state.settings.view.side_panels() {
+        side_panels =
+            side_panels.push(widget::Button::new(widget::text(format!("{sp}"))).on_press(
+                Message::ToggleSidePanel(state.settings.view.side_panels(), *sp),
+            ));
     }
+
+    let content = if state.settings.panel_side == PanelSide::Left {
+        widget::row![side_panels, widget::horizontal_space(), views]
+    } else {
+        widget::row![views, widget::horizontal_space(), side_panels]
+    };
 
     content.width(Length::Fill).padding(10).into()
 }

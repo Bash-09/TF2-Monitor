@@ -16,6 +16,7 @@ pub const DISCONNECT: char = '\u{f1e6}';
 pub const JOINING: char = '\u{e809}';
 pub const TICK: char = '\u{f14a}';
 pub const CROSS: char = '\u{e80a}';
+pub const MINUS: char = '\u{e816}';
 
 pub const CLASS: [char; 10] = [
     BLOCK,      // Other
