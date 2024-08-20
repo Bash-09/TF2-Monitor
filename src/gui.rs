@@ -1,13 +1,14 @@
-use std::rc::Rc;
+use std::{fmt::Display, rc::Rc};
 
 use iced::{
     theme,
     widget::{self, column, row, Button, PickList, Rule, Tooltip},
     Color, Length,
 };
+use serde::{Deserialize, Serialize};
 use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
 
-use crate::{App, IcedContainer, IcedElement, Message};
+use crate::{App, IcedElement, Message};
 
 use self::styles::picklist::VerdictPickList;
 
@@ -23,7 +24,7 @@ pub mod server;
 pub mod settings;
 pub mod styles;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum View {
     Server,
     History,
@@ -32,6 +33,57 @@ pub enum View {
     Demos,
     AnalysedDemo(usize),
     Replay,
+}
+
+impl View {
+    pub fn view<'a>(&'a self, state: &'a App) -> IcedElement<'a> {
+        match self {
+            Self::Server => server::view(state),
+            Self::History => history::view(state),
+            Self::Settings => settings::view(state),
+            Self::Records => records::view(state),
+            Self::Demos => demos::demos_list_view(state),
+            Self::AnalysedDemo(demo) => demos::analysed_demo_view(state, *demo),
+            Self::Replay => replay::view(state),
+        }
+    }
+
+    #[must_use]
+    pub const fn side_panels(&self) -> &'static [SidePanel] {
+        match self {
+            Self::Server | Self::History => &[SidePanel::ChatKills, SidePanel::Votes],
+            Self::Demos => &[SidePanel::DemoFilters],
+            Self::Settings | Self::Records | Self::AnalysedDemo(_) | Self::Replay => &[],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum SidePanel {
+    ChatKills,
+    Votes,
+    DemoFilters,
+}
+
+impl Display for SidePanel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::ChatKills => "Chat & Killfeed",
+            Self::Votes => "Votes",
+            Self::DemoFilters => "Filters",
+        };
+        write!(f, "{str}")
+    }
+}
+
+impl SidePanel {
+    pub fn view<'b>(&self, state: &'b App) -> IcedElement<'b> {
+        match self {
+            Self::ChatKills => chat_killfeed_view(state),
+            Self::Votes => coming_soon(),
+            Self::DemoFilters => coming_soon(),
+        }
+    }
 }
 
 pub const FONT_SIZE: u16 = 13;
@@ -125,44 +177,32 @@ pub fn verdict_picker<'a>(
 #[must_use]
 pub fn main_window(state: &App) -> impl Into<IcedElement<'_>> {
     const SPLIT: [u16; 2] = [7, 3];
-    // Right panel is either chat + killfeed or the currently selected player
-    let right_panel: Option<IcedContainer<'_>> =
-        match (state.selected_player, state.settings.show_chat_and_killfeed) {
-            (Some(steamid), _) => Some(widget::Container::new(player::detailed_player_view(
-                state, steamid,
-            ))),
-            (None, true) => Some(widget::Container::new(column![
-                widget::Container::new(chat::view(state))
-                    .width(Length::Fill)
-                    .height(Length::FillPortion(1)),
-                Rule::horizontal(1),
-                widget::Container::new(killfeed::view(state))
-                    .width(Length::Fill)
-                    .height(Length::FillPortion(1))
-            ])),
-            (None, false) => None,
-        };
+
+    let side_panel = state
+        .selected_player
+        .map(|p| player::detailed_player_view(state, p))
+        .or_else(|| {
+            state
+                .settings
+                .view
+                .side_panels()
+                .iter()
+                .find(|p| state.settings.sidepanels.contains(*p))
+                .map(|sp| sp.view(state))
+        });
 
     // Rest of the view
     let mut content = widget::row![widget::column![
         view_select(state),
         Rule::horizontal(1),
-        match state.view {
-            View::Server => server::view(state),
-            View::History => history::view(state),
-            View::Records => records::view(state),
-            View::Demos => demos::demos_list_view(state),
-            View::AnalysedDemo(idx) => demos::analysed_demo_view(state, idx),
-            View::Replay => state.replay.view(state),
-            View::Settings => settings::view(state),
-        }
+        state.settings.view.view(state),
     ]
     .width(Length::FillPortion(SPLIT[0]))
     .height(Length::Fill)];
 
-    if let Some(right_panel) = right_panel {
+    if let Some(side_panel) = side_panel {
         content = content.push(Rule::vertical(1)).push(
-            right_panel
+            widget::Container::new(side_panel)
                 .width(Length::FillPortion(SPLIT[1]))
                 .height(Length::Fill),
         );
@@ -188,18 +228,21 @@ pub fn view_select(state: &App) -> IcedElement<'_> {
     let mut views = row![].spacing(10);
     for &(name, v) in VIEWS {
         let mut button = Button::new(name);
-        if state.view != v {
+        if state.settings.view != v {
             button = button.on_press(Message::SetView(v));
         }
         views = views.push(button);
     }
 
-    let content = row![
-        views,
-        widget::horizontal_space(),
-        Button::new("Chat and Killfeed").on_press(Message::ToggleChatKillfeed),
-    ]
-    .spacing(10);
+    let mut content = row![views, widget::horizontal_space()].spacing(10);
+
+    let side_panels = state.settings.view.side_panels();
+    for sp in side_panels {
+        content = content.push(
+            widget::Button::new(widget::text(format!("{sp}")))
+                .on_press(Message::ToggleSidePanel(side_panels, *sp)),
+        );
+    }
 
     content.width(Length::Fill).padding(10).into()
 }
@@ -234,6 +277,30 @@ pub fn coming_soon<'a>() -> IcedElement<'a> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+#[must_use]
+pub fn invalid_view(_state: &App) -> IcedElement<'_> {
+    widget::Container::new(widget::text("Invalid View"))
+        .center_x()
+        .center_y()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
+#[must_use]
+pub fn chat_killfeed_view(state: &App) -> IcedElement<'_> {
+    column![
+        widget::Container::new(chat::view(state))
+            .width(Length::Fill)
+            .height(Length::FillPortion(1)),
+        Rule::horizontal(1),
+        widget::Container::new(killfeed::view(state))
+            .width(Length::Fill)
+            .height(Length::FillPortion(1))
+    ]
+    .into()
 }
 
 /// e.g. 123 secs = "2:03"

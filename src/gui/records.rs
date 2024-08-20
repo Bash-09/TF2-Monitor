@@ -7,17 +7,50 @@ use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
 use super::{copy_button, open_profile_button, verdict_picker, FONT_SIZE, PFP_SMALL_SIZE};
 use crate::{App, IcedElement, Message, ALIAS_KEY};
 
+pub struct State {
+    pub to_display: Vec<SteamID>,
+    pub num_per_page: usize,
+    pub current_page: usize,
+    pub verdict_whitelist: Vec<Verdict>,
+    pub search: String,
+}
+
+impl State {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            to_display: Vec::new(),
+            num_per_page: 50,
+            current_page: 0,
+            verdict_whitelist: vec![
+                Verdict::Trusted,
+                Verdict::Player,
+                Verdict::Suspicious,
+                Verdict::Cheater,
+                Verdict::Bot,
+            ],
+            search: String::new(),
+        }
+    }
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[must_use]
 pub fn view(state: &App) -> IcedElement<'_> {
     // Pages
-    let num_pages = state.records_to_display.len() / state.records_per_page + 1;
-    let displaying_start =
-        (state.record_page * state.records_per_page + 1).min(state.records_to_display.len());
-    let displaying_end = if state.record_page == num_pages - 1 {
-        (num_pages - 1) * state.records_per_page
-            + state.records_to_display.len() % state.records_per_page
+    let num_pages = state.records.to_display.len() / state.records.num_per_page + 1;
+    let displaying_start = (state.records.current_page * state.records.num_per_page + 1)
+        .min(state.records.to_display.len());
+    let displaying_end = if state.records.current_page == num_pages - 1 {
+        (num_pages - 1) * state.records.num_per_page
+            + state.records.to_display.len() % state.records.num_per_page
     } else {
-        (state.record_page + 1) * state.records_per_page
+        (state.records.current_page + 1) * state.records.num_per_page
     };
 
     let button = |contents: &str| {
@@ -31,18 +64,24 @@ pub fn view(state: &App) -> IcedElement<'_> {
     let header = widget::row![
         widget::Space::with_width(15),
         button("<<").on_press(Message::SetRecordPage(0)),
-        button("<").on_press(Message::SetRecordPage(state.record_page.saturating_sub(1))),
-        widget::column![text(format!("{}", state.record_page + 1))]
+        button("<").on_press(Message::SetRecordPage(
+            state.records.current_page.saturating_sub(1)
+        )),
+        widget::column![text(format!("{}", state.records.current_page + 1))]
             .align_items(iced::Alignment::Center)
             .width(75),
         button(">").on_press(Message::SetRecordPage(
-            state.record_page.saturating_add(1).min(num_pages - 1)
+            state
+                .records
+                .current_page
+                .saturating_add(1)
+                .min(num_pages - 1)
         )),
         button(">>").on_press(Message::SetRecordPage(num_pages - 1)),
         widget::horizontal_space(),
         widget::text(format!(
             "Displaying {displaying_start} - {displaying_end} of {} ({num_pages} {})",
-            state.records_to_display.len(),
+            state.records.to_display.len(),
             if num_pages == 1 { "page" } else { "pages" }
         )),
         widget::Space::with_width(15),
@@ -51,7 +90,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
     .align_items(iced::Alignment::Center);
 
     let filter_checkbox = |v: Verdict| {
-        widget::checkbox(format!("{v}"), state.record_verdict_whitelist.contains(&v))
+        widget::checkbox(format!("{v}"), state.records.verdict_whitelist.contains(&v))
             .on_toggle(move |_| Message::ToggleVerdictFilter(v))
     };
 
@@ -62,7 +101,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
         filter_checkbox(Verdict::Suspicious),
         filter_checkbox(Verdict::Cheater),
         filter_checkbox(Verdict::Bot),
-        text_input("Search", &state.record_search).on_input(Message::SetRecordSearch),
+        text_input("Search", &state.records.search).on_input(Message::SetRecordSearch),
         widget::Space::with_width(0),
     ]
     .spacing(15)
@@ -71,10 +110,11 @@ pub fn view(state: &App) -> IcedElement<'_> {
     // Records
     let mut contents = widget::column![].spacing(3).padding(15);
     for &s in state
-        .records_to_display
+        .records
+        .to_display
         .iter()
-        .skip(state.record_page * state.records_per_page)
-        .take(state.records_per_page)
+        .skip(state.records.current_page * state.records.num_per_page)
+        .take(state.records.num_per_page)
     {
         contents = contents.push(row(state, s));
     }

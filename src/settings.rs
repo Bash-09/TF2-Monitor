@@ -1,4 +1,8 @@
+use std::{collections::HashSet, fmt::Display};
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::gui::{SidePanel, View};
 
 pub const SETTINGS_IDENTIFIER: &str = "MACClientSettings";
 
@@ -8,8 +12,10 @@ pub const SETTINGS_IDENTIFIER: &str = "MACClientSettings";
 pub struct AppSettings {
     pub window_pos: Option<(i32, i32)>,
     pub window_size: Option<(u32, u32)>,
-    pub show_chat_and_killfeed: bool,
     pub enable_mac_integration: bool,
+    pub view: View,
+    pub sidepanels: HashSet<SidePanel>,
+    pub panel_side: PanelSide,
     #[serde(serialize_with = "serialize_theme")]
     #[serde(deserialize_with = "deserialize_theme")]
     pub theme: iced::Theme,
@@ -20,10 +26,24 @@ impl Default for AppSettings {
         Self {
             window_pos: None,
             window_size: None,
-            show_chat_and_killfeed: false,
             enable_mac_integration: false,
+            view: View::Server,
+            sidepanels: HashSet::new(),
+            panel_side: PanelSide::Right,
             theme: iced::Theme::CatppuccinMocha,
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum PanelSide {
+    Left,
+    Right,
+}
+
+impl Display for PanelSide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 

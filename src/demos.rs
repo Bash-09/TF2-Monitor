@@ -33,8 +33,7 @@ pub const CLASSES: [Class; 9] = [
 pub type AnalysedDemoID = tf2_monitor_core::md5::Digest;
 type AnalysedDemoResult = (PathBuf, Option<(AnalysedDemoID, Box<AnalysedDemo>)>);
 
-#[allow(clippy::module_name_repetitions)]
-pub struct DemosState {
+pub struct State {
     pub demo_files: Vec<Demo>,
     pub demos_to_display: Vec<usize>,
     pub analysed_demos: HashMap<AnalysedDemoID, AnalysedDemo>,
@@ -47,6 +46,40 @@ pub struct DemosState {
     pub request_analysis: Sender<PathBuf>,
     #[allow(clippy::pub_underscore_fields, clippy::type_complexity)]
     pub _demo_analysis_output: RefCell<Option<UnboundedReceiver<AnalysedDemoResult>>>,
+}
+
+pub struct Filters {
+    sort_by: SortBy,
+    direction: SortDirection,
+
+    show_analysed: bool,
+    show_non_analysed: bool,
+
+    contains_player_input: String,
+    // Steamid (any format), name (case-insensitive, will include previous names if records exist)
+    contains_players: Vec<String>,
+
+    // Map, server name, IP, file name
+    search_input: String,
+    search_terms: Vec<String>,
+}
+
+pub enum SortBy {
+    FileName,
+    FileSize,
+    FileCreated,
+    DemoDuration,
+    NumKills,
+    NumDeaths,
+    NumAssists,
+    NumPlayers,
+    Map,
+    ServerName,
+}
+
+pub enum SortDirection {
+    Ascending,
+    Descending,
 }
 
 #[derive(Debug, Clone)]
@@ -76,7 +109,7 @@ impl From<DemosMessage> for Message {
     }
 }
 
-impl DemosState {
+impl State {
     #[must_use]
     pub fn new() -> Self {
         let (request_tx, completed_rx) = spawn_demo_analyser_thread();
@@ -267,7 +300,7 @@ impl DemosState {
     }
 }
 
-impl Default for DemosState {
+impl Default for State {
     fn default() -> Self {
         Self::new()
     }

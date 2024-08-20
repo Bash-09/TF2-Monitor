@@ -8,12 +8,12 @@ use std::{
     any::TypeId, cell::RefCell, collections::{HashMap, HashSet}, io::Cursor, path::PathBuf, time::Duration
 };
 use bytes::Bytes;
-use demos::{DemosMessage, DemosState};
+use demos::DemosMessage;
 use replay::{ReplayMessage, ReplayState};
 use tf2_monitor_core::{
     console::ConsoleLog, demo::DemoWatcher, demo_analyser::AnalysedDemo, event_loop::{self, define_events, EventLoop, MessageSource}, masterbase, player::Players, player_records::{PlayerRecords, Verdict}, server::Server, settings::{AppDetails, Settings}, state::MonitorState, steamid_ng::SteamID
 };
-use gui::{chat, icons::FONT_FILE, killfeed, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
+use gui::{chat, icons::FONT_FILE, killfeed, records, SidePanel, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
     futures::{FutureExt, SinkExt},
@@ -115,18 +115,13 @@ pub struct App {
     settings: AppSettings,
 
     // UI State
-    view: View,
     selected_player: Option<SteamID>,
 
     snap_chat_to_bottom: bool,
     snap_kills_to_bottom: bool,
 
     // records
-    records_to_display: Vec<SteamID>,
-    records_per_page: usize,
-    record_page: usize,
-    record_verdict_whitelist: Vec<Verdict>,
-    record_search: String,
+    records: records::State,
 
     // (High res, Low res)
     pfp_cache: HashMap<String, (iced::widget::image::Handle, iced::widget::image::Handle)>,
@@ -136,7 +131,7 @@ pub struct App {
     replay: ReplayState,
 
     // Demos
-    demos: DemosState,
+    demos: demos::State,
 
     // Change TF2 directory
     change_tf2_dir: Sender<PathBuf>,
@@ -156,8 +151,8 @@ pub enum Message {
     SelectPlayer(SteamID),
     UnselectPlayer,
     SetReplay(PathBuf),
-    /// Toggle whether the chat and killfeed section on the right should be shown
-    ToggleChatKillfeed,
+    /// Toggle whether a particular sidepanel is visible 
+    ToggleSidePanel(&'static [SidePanel], SidePanel),
 
     CopyToClipboard(String),
     ChangeVerdict(SteamID, Verdict),
@@ -207,36 +202,25 @@ impl Application for App {
             event_loop,
             settings,
 
-            view: View::Server,
             selected_player: None,
 
             snap_chat_to_bottom: true,
             snap_kills_to_bottom: true,
 
-            records_to_display: Vec::new(),
-            records_per_page: 50,
-            record_page: 0,
-            record_verdict_whitelist: vec![
-                Verdict::Trusted,
-                Verdict::Player,
-                Verdict::Suspicious,
-                Verdict::Cheater,
-                Verdict::Bot,
-            ],
-            record_search: String::new(),
+            records: records::State::new(),
 
             pfp_cache: HashMap::new(),
             pfp_in_progess: HashSet::new(),
 
             replay: ReplayState::new(),
 
-            demos: DemosState::new(),
+            demos: demos::State::new(),
 
             change_tf2_dir: tf2_dir_tx,
             _tf2_dir_changed: RefCell::new(Some(tf2_dir_rx)),
         };
 
-        commands.push(DemosState::refresh_demos(&app));
+        commands.push(demos::State::refresh_demos(&app));
 
         (app, iced::Command::batch(commands))
     }
@@ -349,8 +333,8 @@ impl Application for App {
             #[allow(clippy::match_same_arms)]
             Message::EventOccurred(_) => {}
             Message::SetView(v) => {
-                self.view = v;
-                if matches!(self.view, View::Records) {
+                self.settings.view = v;
+                if matches!(self.settings.view, View::Records) {
                     self.update_displayed_records();
                 }
             }
@@ -384,24 +368,24 @@ impl Application for App {
             Message::MAC(m) => {
                 return self.handle_mac_message(m);
             }
-            Message::SetRecordPage(p) => self.record_page = p,
+            Message::SetRecordPage(p) => self.records.current_page = p,
             Message::ToggleVerdictFilter(v) => {
-                if self.record_verdict_whitelist.contains(&v) {
-                    self.record_verdict_whitelist.retain(|&vv| vv != v);
+                if self.records.verdict_whitelist.contains(&v) {
+                    self.records.verdict_whitelist.retain(|&vv| vv != v);
                 } else {
-                    self.record_verdict_whitelist.push(v);
+                    self.records.verdict_whitelist.push(v);
                 }
 
                 self.update_displayed_records();
 
-                let max_page = self.records_to_display.len() / self.records_per_page;
-                self.record_page = self.record_page.min(max_page);
+                let max_page = self.records.to_display.len() / self.records.num_per_page;
+                self.records.current_page = self.records.current_page.min(max_page);
             }
             Message::SetRecordSearch(search) => {
-                self.record_search = search;
+                self.records.search = search;
                 self.update_displayed_records();
-                let max_page = self.records_to_display.len() / self.records_per_page;
-                self.record_page = self.record_page.min(max_page);
+                let max_page = self.records.to_display.len() / self.records.num_per_page;
+                self.records.current_page = self.records.current_page.min(max_page);
             }
             Message::SetKickBots(kick) => self.mac.settings.autokick_bots = kick,
             Message::ScrolledChat(offset) => {
@@ -409,14 +393,6 @@ impl Application for App {
             }
             Message::ScrolledKills(offset) => {
                 self.snap_kills_to_bottom = (offset.y - 1.0).abs() <= f32::EPSILON;
-            }
-            Message::ToggleChatKillfeed => {
-                if self.selected_player.is_some() {
-                    self.settings.show_chat_and_killfeed = true;
-                    return self.unselect_player();
-                }
-
-                self.settings.show_chat_and_killfeed = !self.settings.show_chat_and_killfeed;
             }
             Message::ProfileLookupRequest(s) => {
                 return self.request_profile_lookup(vec![s]);
@@ -439,15 +415,24 @@ impl Application for App {
                 self.change_tf2_dir.send(new_tf2_dir).map_err(|e| tracing::error!("TF2 Directory could not be update for console and demo watchers: {e}")).ok();
             },
             Message::Demos(msg) => {
-                return DemosState::handle_message(self, msg);
+                return demos::State::handle_message(self, msg);
             },
             Message::SetReplay(path) => {
-                self.view = View::Replay;
+                self.settings.view = View::Replay;
                 return self.replay.handle_message(ReplayMessage::SetDemoPath(path), &self.mac);
             }
             Message::SetTheme(theme) => {
                 self.settings.theme = theme;
             },
+            Message::ToggleSidePanel(available_panels, panel) => {
+                if self.selected_player.is_some() || !self.settings.sidepanels.contains(&panel) {
+                    available_panels.iter().for_each(|p| { self.settings.sidepanels.remove(p); });
+                    self.settings.sidepanels.insert(panel);
+                    self.unselect_player();
+                } else {
+                    available_panels.iter().for_each(|p| { self.settings.sidepanels.remove(p); });
+                }
+            }
         };
 
         iced::Command::none()
@@ -491,29 +476,29 @@ impl App {
     }
 
     fn update_displayed_records(&mut self) {
-        let steamid = SteamID::try_from(self.record_search.as_str()).ok();
+        let steamid = SteamID::try_from(self.records.search.as_str()).ok();
 
-        self.records_to_display = self
+        self.records.to_display = self
             .mac
             .players
             .records
             .iter()
             .map(|(s, r)| (*s, r))
-            .filter(|(_, r)| self.record_verdict_whitelist.contains(&r.verdict()))
+            .filter(|(_, r)| self.records.verdict_whitelist.contains(&r.verdict()))
             .filter(|(s, r)| {
                 // Search bar
-                if self.record_search.is_empty() {
+                if self.records.search.is_empty() {
                     return true;
                 }
 
                 // Previous names
                 r.previous_names()
                     .iter()
-                    .any(|n| n.contains(&self.record_search))
+                    .any(|n| n.contains(&self.records.search))
 
                     // Steamid
                     || steamid.is_some_and(|_| {
-                        format!("{}", u64::from(*s)).contains(&self.record_search)
+                        format!("{}", u64::from(*s)).contains(&self.records.search)
                     })
 
                     // Current name
@@ -521,19 +506,19 @@ impl App {
                         .mac
                         .players
                         .get_name(*s)
-                        .is_some_and(|n| n.contains(&self.record_search))
+                        .is_some_and(|n| n.contains(&self.records.search))
 
                     // Alias
-                    || r.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()).is_some_and(|s| s.contains(&self.record_search))
+                    || r.custom_data().get(ALIAS_KEY).and_then(|v| v.as_str()).is_some_and(|s| s.contains(&self.records.search))
 
                     // Notes
-                    || r.custom_data().get(NOTES_KEY).and_then(|v| v.as_str()).is_some_and(|s| s.contains(&self.record_search))
+                    || r.custom_data().get(NOTES_KEY).and_then(|v| v.as_str()).is_some_and(|s| s.contains(&self.records.search))
                     
             })
             .map(|(s, _)| s)
             .collect();
 
-        self.records_to_display.sort_by_key(|s| {
+        self.records.to_display.sort_by_key(|s| {
             self.mac
                 .players
                 .records
@@ -546,15 +531,15 @@ impl App {
         if let Some(steamid) = steamid {
             #[allow(clippy::unreadable_literal)]
             if u64::from(steamid) >= 76561197960265728 {
-                if let Some(i) = self.records_to_display.iter().position(|s| *s == steamid) {
-                    self.records_to_display.remove(i);
+                if let Some(i) = self.records.to_display.iter().position(|s| *s == steamid) {
+                    self.records.to_display.remove(i);
                 }
 
-                self.records_to_display.push(steamid);
+                self.records.to_display.push(steamid);
             }
         }
         
-        self.records_to_display.reverse();
+        self.records.to_display.reverse();
     }
 
     fn handle_mac_message(&mut self, message: MonitorMessage) -> iced::Command<Message> {
@@ -719,7 +704,7 @@ impl App {
     fn unselect_player(&mut self) -> iced::Command<Message> {
         self.selected_player = None;
 
-        if self.settings.show_chat_and_killfeed {
+        if self.settings.sidepanels.contains(&SidePanel::ChatKills) {
             return iced::Command::batch([
                 snap_to(widget::scrollable::Id::new(chat::SCROLLABLE_ID), RelativeOffset { x: 0.0, y: 1.0 }),
                 snap_to(widget::scrollable::Id::new(killfeed::SCROLLABLE_ID), RelativeOffset { x: 0.0, y: 1.0 }),

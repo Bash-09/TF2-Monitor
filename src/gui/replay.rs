@@ -3,10 +3,10 @@ use iced::{
     Length,
 };
 
-use crate::{replay::ReplayMessage, App, IcedContainer, Message};
+use crate::{replay::ReplayMessage, App, IcedContainer, IcedElement, Message};
 
 #[must_use]
-pub fn main_window(app: &App) -> IcedContainer<'_> {
+pub fn view(app: &App) -> IcedElement<'_> {
     let content = widget::column![
         path_selection(app),
         widget::horizontal_rule(1),
@@ -20,6 +20,7 @@ pub fn main_window(app: &App) -> IcedContainer<'_> {
         .height(Length::Fill)
         .center_x()
         .center_y()
+        .into()
 }
 
 #[must_use]

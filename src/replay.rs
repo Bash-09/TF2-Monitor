@@ -11,7 +11,8 @@ use tf2_monitor_core::{
     tf_demo_parser::{demo::header::Header, Demo},
 };
 
-use crate::{gui::replay::main_window, App, IcedElement, Message};
+use crate::gui::replay::view;
+use crate::{App, IcedElement, Message};
 
 const DEFAULT_THUMBNAIL: &[u8] = include_bytes!("default.png");
 
@@ -124,7 +125,7 @@ impl ReplayState {
     }
 
     pub fn view<'a>(&'a self, state: &'a App) -> IcedElement<'a> {
-        main_window(state).into()
+        view(state).into()
     }
 
     pub fn set_demo_path(&mut self, path: PathBuf) {
