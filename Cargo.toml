@@ -1,3 +1,5 @@
+workspace = { members = ["tf2_monitor_core", "event_loop"] }
+
 [package]
 name = "tf2_monitor"
 version = "0.1.0"
@@ -11,7 +13,7 @@ bytes = "1.5.0"
 card = "0.1.0"
 chrono = "0.4.38"
 clap = "4.4.8"
-tf2_monitor_core = { git = "https://github.com/Bash-09/TF2-Monitor-Core" }
+tf2_monitor_core = { path = "tf2_monitor_core" }
 iced = { version = "0.12.1", features = ["tokio", "image"] }
 image = "0.24.9"
 open = "5.0.1"
@@ -25,12 +27,12 @@ tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 thiserror = "1.0.62"
+threadpool = "1.8.1"
+num_cpus = "1.16.0"
+rmp-serde = "1.3.0"
 
 # demo2replay
 vtf = "0.2.1"
 filenamify = "0.1.0"
 rfd = "0.14.1"
 anyhow = "1.0.86"
-threadpool = "1.8.1"
-num_cpus = "1.16.0"
-rmp-serde = "1.3.0"
