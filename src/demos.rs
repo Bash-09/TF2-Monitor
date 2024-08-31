@@ -19,7 +19,7 @@ use thiserror::Error;
 use threadpool::ThreadPool;
 use tokio::{io::AsyncReadExt, sync::mpsc::UnboundedReceiver, task::JoinSet};
 
-use crate::{App, Message, APP};
+use crate::{graph::KDAChart, gui::View, App, Message, APP};
 
 pub const CLASSES: [Class; 9] = [
     Class::Scout,
@@ -49,6 +49,9 @@ pub struct State {
 
     pub demos_per_page: usize,
     pub page: usize,
+
+    /// Analysed demo view player performance chart
+    pub chart: KDAChart,
 
     pub request_analysis: Sender<PathBuf>,
     #[allow(clippy::pub_underscore_fields, clippy::type_complexity)]
@@ -173,6 +176,8 @@ impl State {
             demos_per_page: 50,
             page: 0,
 
+            chart: KDAChart::default(),
+
             request_analysis: request_tx,
             _demo_analysis_output: RefCell::new(Some(completed_rx)),
         }
@@ -239,6 +244,19 @@ impl State {
                 match analysed_demo {
                     Some((hash, analysed_demo)) => {
                         state.demos.analysed_demos.insert(hash, *analysed_demo);
+
+                        if let View::AnalysedDemo(demo) = state.settings.view {
+                            if state
+                                .demos
+                                .demo_files
+                                .get(demo)
+                                .is_some_and(|d| d.analysed == hash)
+                            {
+                                state.demos.chart =
+                                    KDAChart::new(state, demo, state.selected_player);
+                            }
+                        }
+
                         tracing::debug!("Successfully got analysed demo {demo_path:?}");
                     }
                     None if !demo_path.as_os_str().is_empty() => {

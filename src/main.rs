@@ -9,6 +9,7 @@ use std::{
 };
 use bytes::Bytes;
 use demos::DemosMessage;
+use graph::KDAChart;
 use replay::{ReplayMessage, ReplayState};
 use tf2_monitor_core::{
     console::ConsoleLog, demo::DemoWatcher, demo_analyser::AnalysedDemo, event_loop::{self, define_events, EventLoop, MessageSource}, masterbase, player::Players, player_records::{PlayerRecords, Verdict}, server::Server, settings::{AppDetails, Settings}, state::MonitorState, steamid_ng::SteamID
@@ -45,6 +46,7 @@ pub mod gui;
 pub mod settings;
 pub mod replay;
 pub mod demos;
+pub mod graph;
 mod tracing_setup;
 
 pub const APP: AppDetails<'static> = AppDetails {
@@ -198,7 +200,7 @@ impl Application for App {
         };
 
         let (tf2_dir_tx, tf2_dir_rx) = tokio::sync::broadcast::channel(1);
-        let app = Self {
+        let mut app = Self {
             mac,
             event_loop,
             settings,
@@ -341,11 +343,18 @@ impl Application for App {
                 if matches!(self.settings.view, View::Demos) {
                     self.update_demo_list();
                 } 
+                if let View::AnalysedDemo(id) = self.settings.view {
+                    self.demos.chart = KDAChart::new(self, id, self.selected_player);
+                }
             }
             Message::ChangeVerdict(steamid, verdict) => self.update_verdict(steamid, verdict),
             Message::ChangeNotes(steamid, notes) => self.update_notes(steamid, notes),
             Message::SelectPlayer(steamid) => {
                 self.selected_player = Some(steamid);
+
+                if let View::AnalysedDemo(demo) = self.settings.view {
+                    self.demos.chart = KDAChart::new(self, demo, Some(steamid)); 
+                }
 
                 // Fetch their pfp if we don't have it currently but have the steam info
                 if self.mac.players.steam_info.contains_key(&steamid) {
@@ -727,6 +736,9 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        if let View::AnalysedDemo(_) = self.settings.view {
+            self.settings.view = View::Demos;
+        }
         self.save_settings();
         self.mac.players.records.save_ok();
         self.mac.players.save_steam_info_ok();

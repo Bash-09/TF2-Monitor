@@ -4,6 +4,7 @@ use iced::{
     widget::{self, scrollable::Properties, Scrollable},
     Length,
 };
+use plotters_iced::ChartWidget;
 use tf2_monitor_core::{demo_analyser::AnalysedDemo, steamid_ng::SteamID};
 
 use crate::{
@@ -315,6 +316,15 @@ pub fn analysed_demo_view(state: &App, demo_index: usize) -> IcedElement<'_> {
         .spacing(15),
     );
 
+    // Graph
+    let graph = widget::column![ChartWidget::new(&state.demos.chart)
+        .width(Length::Fixed(800.0))
+        .height(Length::Fixed(400.0))]
+    .width(Length::Fill)
+    .align_items(iced::Alignment::Center);
+
+    contents = contents.push(graph);
+
     // Players heading
     let mut player_classes_heading = widget::row![
         widget::Space::with_width(0),
@@ -349,14 +359,14 @@ pub fn analysed_demo_view(state: &App, demo_index: usize) -> IcedElement<'_> {
         player_list = player_list.push(player_row(analysed, s));
     }
 
-    contents = contents.push(
-        widget::scrollable(widget::row![widget::Space::with_width(15), player_list]).direction(
-            widget::scrollable::Direction::Vertical(Properties::default()),
-        ),
-    );
+    contents = contents.push(widget::row![widget::Space::with_width(15), player_list]);
     contents = contents.push(widget::Space::with_height(15));
 
-    contents.into()
+    widget::scrollable(contents)
+        .direction(widget::scrollable::Direction::Vertical(
+            Properties::default(),
+        ))
+        .into()
 }
 
 fn player_row(analysed: &AnalysedDemo, steamid: SteamID) -> IcedElement<'_> {
