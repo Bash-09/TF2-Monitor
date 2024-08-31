@@ -1,0 +1,12 @@
+/target
+/log
+.idea/
+.vscode/
+.env
+*.log
+bundle/
+/ui
+!/ui/.gitkeep
+/ui_temp
+shell.sh
+/assets/icon.ico

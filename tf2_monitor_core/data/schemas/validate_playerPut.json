@@ -1,0 +1,35 @@
+{
+	"definitions": {},
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://example.com/object1688895985.json",
+	"title": "Root",
+	"type": "object",
+	"patternProperties": {
+		"^[0-9]{17}$": {
+			"type": "object",
+			"required": [
+				"localVerdict",
+				"customData"
+			],
+			"properties": {
+				"localVerdict": {
+					"title": "Localverdict",
+					"type": "string",
+					"default": "None",
+					"examples": [
+						"Cheater"
+					],
+					"pattern": "^.+$"
+				},
+				"customData": {
+					"title": "Customdata",
+					"type": "object",
+					"required": [
+					],
+					"properties": {
+					}
+				}
+			}
+		}
+	}
+}
