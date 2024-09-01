@@ -165,6 +165,9 @@ pub enum Message {
     ToggleMACEnabled(bool),
     BrowseTF2Dir,
 
+    AddDemoDir,
+    RemoveDemoDir(usize),
+
     /// Which page of records to display
     SetRecordPage(usize),
     ToggleVerdictFilter(Verdict),
@@ -200,7 +203,7 @@ impl Application for App {
         };
 
         let (tf2_dir_tx, tf2_dir_rx) = tokio::sync::broadcast::channel(1);
-        let mut app = Self {
+        let app = Self {
             mac,
             event_loop,
             settings,
@@ -447,6 +450,19 @@ impl Application for App {
                 for p in available_panels { self.settings.sidepanels.remove(p); }
             }
             Message::SetPanelSide(side) => self.settings.panel_side = side,
+            Message::AddDemoDir => {
+                let Some(new_demo_dir) = rfd::FileDialog::new().pick_folder() else {
+                    return iced::Command::none();
+                };
+                self.settings.demo_directories.push(new_demo_dir);
+                return snap_to(
+                    widget::scrollable::Id::new(gui::settings::SCROLLABLE_ID),
+                    RelativeOffset { x: 0.0, y: 1.0 },
+                );
+            },
+            Message::RemoveDemoDir(idx) => {
+                self.settings.demo_directories.remove(idx);
+            },
         };
 
         iced::Command::none()
@@ -556,6 +572,7 @@ impl App {
         self.records.to_display.reverse();
     }
 
+    /// Updates the list of demos that is being displayed
     pub fn update_demo_list(&mut self) {
         self.demos.demos_to_display = self.settings.demo_filters.filter(self);
         self.demos.page = self.demos.page.min(self.demos.demos_to_display.len() / self.demos.demos_per_page);

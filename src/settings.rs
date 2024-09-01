@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Display};
+use std::{collections::HashSet, fmt::Display, path::PathBuf};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -21,6 +21,7 @@ pub struct AppSettings {
     pub sidepanels: HashSet<SidePanel>,
     pub panel_side: PanelSide,
     pub demo_filters: demos::Filters,
+    pub demo_directories: Vec<PathBuf>,
     #[serde(serialize_with = "serialize_theme")]
     #[serde(deserialize_with = "deserialize_theme")]
     pub theme: iced::Theme,
@@ -36,6 +37,7 @@ impl Default for AppSettings {
             sidepanels: HashSet::new(),
             panel_side: PanelSide::Right,
             demo_filters: demos::Filters::new(),
+            demo_directories: Vec::new(),
             theme: iced::Theme::CatppuccinMocha,
         }
     }

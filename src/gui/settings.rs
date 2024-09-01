@@ -1,5 +1,5 @@
 use iced::{
-    widget::{self, Scrollable},
+    widget::{self, scrollable::Id, Scrollable},
     Length,
 };
 use tf2_monitor_core::{
@@ -7,7 +7,9 @@ use tf2_monitor_core::{
     settings::FriendsAPIUsage,
 };
 
-use crate::{gui::tooltip, settings::{PANEL_SIDES, THEMES}, App, IcedElement, Message, MonitorMessage};
+use crate::{gui::{icons::{self, icon}, tooltip}, settings::{PANEL_SIDES, THEMES}, App, IcedElement, Message, MonitorMessage};
+
+pub const SCROLLABLE_ID: &str = "Chat";
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
@@ -30,6 +32,25 @@ pub fn view(state: &App) -> IcedElement<'_> {
             widget::horizontal_space()
         ]
     };
+
+    let mut demo_dir_list = widget::column![].spacing(5);
+    if let Some(tf2_dir) = &state.mac.settings.tf2_directory {
+        demo_dir_list = demo_dir_list.push(
+            widget::row![
+                widget::button(widget::column![icon(icons::MINUS)].width(20).align_items(iced::Alignment::Center)),
+                widget::text(format!("{:?}", tf2_dir.join("tf/demos"))),
+            ].align_items(iced::Alignment::Center).spacing(15)
+        );
+        
+    }
+    for (i, dir) in state.settings.demo_directories.iter().enumerate().rev() {
+        demo_dir_list = demo_dir_list.push(
+            widget::row![
+                widget::button(widget::column![icon(icons::MINUS)].width(20).align_items(iced::Alignment::Center)).on_press(Message::RemoveDemoDir(i)),
+                widget::text(format!("{dir:?}")),
+            ].align_items(iced::Alignment::Center).spacing(15)
+        );
+    }
 
     let contents = widget::column![
         // UI
@@ -255,11 +276,21 @@ pub fn view(state: &App) -> IcedElement<'_> {
             )
         ].align_items(iced::Alignment::Center).spacing(5),
 
+        // DEMOS
+        widget::Space::with_height(HEADING_SPACING),
+        heading("Demos"),
+
+        tooltip(
+            widget::button("Add directory").on_press(Message::AddDemoDir),            
+            "Add a folder to search for recorded demos in (for use in the Demos tab)"
+        ),
+        demo_dir_list,
+
         // External section? Probably not
     ]
     .width(Length::Fill)
     .spacing(5)
     .padding(15);
 
-    Scrollable::new(contents).into()
+    Scrollable::new(contents).id(Id::new(SCROLLABLE_ID)).into()
 }

@@ -351,7 +351,7 @@ impl State {
 
     /// Clear the current store of demo files and search the directories for new demo files
     pub fn refresh_demos(state: &App) -> iced::Command<Message> {
-        let mut dirs_to_search = Vec::new();
+        let mut dirs_to_search = state.settings.demo_directories.clone();
         if let Some(tf2_dir) = &state.mac.settings.tf2_directory {
             dirs_to_search.push(tf2_dir.join("tf/demos"));
         }

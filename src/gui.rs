@@ -33,7 +33,6 @@ pub enum View {
     Demos,
     AnalysedDemo(usize),
     Replay,
-    Testing,
 }
 
 impl View {
@@ -46,7 +45,6 @@ impl View {
             Self::Demos => demos::demos_list_view(state),
             Self::AnalysedDemo(demo) => demos::analysed_demo_view(state, *demo),
             Self::Replay => replay::view(state),
-            Self::Testing => graph::view(state),
         }
     }
 
@@ -55,11 +53,7 @@ impl View {
         match self {
             Self::Server | Self::History => &[SidePanel::ChatKills, SidePanel::Votes],
             Self::Demos => &[SidePanel::DemoFilters],
-            Self::Settings
-            | Self::Records
-            | Self::AnalysedDemo(_)
-            | Self::Replay
-            | Self::Testing => &[],
+            Self::Settings | Self::Records | Self::AnalysedDemo(_) | Self::Replay => &[],
         }
     }
 }
@@ -233,7 +227,6 @@ pub fn view_select(state: &App) -> IcedElement<'_> {
         ("Demos", View::Demos),
         ("Replay", View::Replay),
         ("Settings", View::Settings),
-        ("Testing", View::Testing),
     ];
 
     let mut views = row![].spacing(10);
