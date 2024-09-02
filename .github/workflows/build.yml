@@ -19,11 +19,11 @@ jobs:
           - os: windows-latest
             os-name: Windows
             artifact-path: |
-              target/release/client_backend.exe
+              target/release/tf2_monitor.exe
           - os: ubuntu-latest
             os-name: Linux
             artifact-path: |
-              target/release/client_backend
+              target/release/tf2_monitor
     
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os-name }} Build
