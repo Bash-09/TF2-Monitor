@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: windows-latest
+            os-name: Windows
+            artifact-path: |
+              target/release/client_backend.exe
+          - os: ubuntu-latest
+            os-name: Linux
+            artifact-path: |
+              target/release/client_backend
+    
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os-name }} Build
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose --release
+      - name: Test
+        run: cargo test --verbose --release
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+  
