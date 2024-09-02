@@ -36,9 +36,9 @@ use crate::{
 };
 
 // if feature "include-ui" is enabled, bundle the web UI files
-#[cfg(feature = "include-ui")]
-static BUNDLED_UI: Option<Dir> = Some(include_dir::include_dir!("$CARGO_MANIFEST_DIR/ui"));
-#[cfg(not(feature = "include-ui"))]
+// #[cfg(feature = "include-ui")]
+// static BUNDLED_UI: Option<Dir> = Some(include_dir::include_dir!("$CARGO_MANIFEST_DIR/ui"));
+// #[cfg(not(feature = "include-ui"))]
 static BUNDLED_UI: Option<Dir> = None;
 
 const HEADERS: [(header::HeaderName, &str); 2] = [
