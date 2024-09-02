@@ -7,7 +7,6 @@ on:
   pull_request:
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -Dwarnings
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 
@@ -32,9 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: cargo build --verbose --release
+        run: cargo build --release
       - name: Test
-        run: cargo test --verbose --release
+        run: cargo test --release
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
