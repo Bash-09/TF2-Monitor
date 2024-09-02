@@ -1,13 +1,10 @@
-use iced::{widget, Length};
+use iced::Length;
 use plotters::{
-    element::{PathElement, Rectangle},
+    element::Rectangle,
     series::LineSeries,
-    style::{
-        Color, IntoFont, IntoTextStyle, RGBAColor, RGBColor, ShapeStyle, BLACK, BLUE, GREEN, RED,
-        WHITE,
-    },
+    style::{IntoFont, RGBAColor, RGBColor, BLUE, GREEN, RED},
 };
-use plotters_iced::{sample::lttb::LttbSource, Chart, ChartWidget};
+use plotters_iced::{Chart, ChartWidget};
 use tf2_monitor_core::{demo_analyser::Death, steamid_ng::SteamID};
 
 use crate::{App, IcedElement, Message};

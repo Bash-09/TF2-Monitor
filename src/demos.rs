@@ -50,7 +50,8 @@ pub struct State {
     pub demos_per_page: usize,
     pub page: usize,
 
-    /// Analysed demo view player performance chart
+    /// Analysed demo view stuff
+    pub viewing_player: Option<SteamID>,
     pub chart: KDAChart,
 
     pub request_analysis: Sender<PathBuf>,
@@ -72,6 +73,12 @@ pub struct Filters {
 
     // Map, server name, IP, file name
     pub search: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AnalysedDemoView {
+    Players,
+    Events,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -144,6 +151,9 @@ pub enum DemosMessage {
     AnalyseAll,
     DemoAnalysed(AnalysedDemoResult),
 
+    SetAnalysedDemoView(AnalysedDemoView),
+    InspectPlayer(SteamID),
+
     FilterSortBy(SortBy),
     FilterSortDirection(SortDirection),
     FilterShowAnalysed(bool),
@@ -176,6 +186,7 @@ impl State {
             demos_per_page: 50,
             page: 0,
 
+            viewing_player: None,
             chart: KDAChart::default(),
 
             request_analysis: request_tx,
@@ -344,6 +355,8 @@ impl State {
                 state.settings.demo_filters.contains_players.remove(i);
                 state.update_demo_list();
             }
+            DemosMessage::SetAnalysedDemoView(view) => state.settings.analysed_demo_view = view,
+            DemosMessage::InspectPlayer(p) => state.demos.viewing_player = Some(p),
         }
 
         iced::Command::none()

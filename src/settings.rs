@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Display, path::PathBuf};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
-    demos,
+    demos::{self, AnalysedDemoView},
     gui::{SidePanel, View},
 };
 
@@ -20,6 +20,7 @@ pub struct AppSettings {
     pub view: View,
     pub sidepanels: HashSet<SidePanel>,
     pub panel_side: PanelSide,
+    pub analysed_demo_view: AnalysedDemoView,
     pub demo_filters: demos::Filters,
     pub demo_directories: Vec<PathBuf>,
     #[serde(serialize_with = "serialize_theme")]
@@ -31,11 +32,12 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             window_pos: None,
-            window_size: None,
+            window_size: Some((1275, 720)),
             enable_mac_integration: false,
             view: View::Server,
             sidepanels: HashSet::new(),
             panel_side: PanelSide::Right,
+            analysed_demo_view: AnalysedDemoView::Players,
             demo_filters: demos::Filters::new(),
             demo_directories: Vec::new(),
             theme: iced::Theme::CatppuccinMocha,

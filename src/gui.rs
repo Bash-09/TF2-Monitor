@@ -8,12 +8,13 @@ use iced::{
 use serde::{Deserialize, Serialize};
 use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
 
-use crate::{graph, settings::PanelSide, App, IcedElement, Message};
+use crate::{settings::PanelSide, App, IcedElement, Message};
 
 use self::styles::picklist::VerdictPickList;
 
 pub mod chat;
 pub mod demos;
+pub mod demos_analyzed;
 pub mod history;
 pub mod icons;
 pub mod killfeed;
@@ -43,7 +44,7 @@ impl View {
             Self::Settings => settings::view(state),
             Self::Records => records::view(state),
             Self::Demos => demos::demos_list_view(state),
-            Self::AnalysedDemo(demo) => demos::analysed_demo_view(state, *demo),
+            Self::AnalysedDemo(demo) => demos_analyzed::analysed_demo_view(state, *demo),
             Self::Replay => replay::view(state),
         }
     }
