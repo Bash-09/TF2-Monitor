@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Display,
     io::{ErrorKind, Read},
     path::PathBuf,
@@ -10,7 +10,11 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tf2_monitor_core::{
-    demo_analyser::{self, AnalysedDemo},
+    demo_analyser::{
+        self,
+        progress::{self, Progress},
+        AnalysedDemo,
+    },
     settings::ConfigFilesError,
     steamid_ng::SteamID,
     tf_demo_parser::demo::parser::analyser::Class,
@@ -43,9 +47,7 @@ type AnalysedDemoResult = (PathBuf, Option<(AnalysedDemoID, Box<AnalysedDemo>)>)
 pub struct State {
     pub demo_files: Vec<Demo>,
     pub demos_to_display: Vec<usize>,
-    pub analysed_demos: HashMap<AnalysedDemoID, AnalysedDemo>,
-    /// Demos in progress
-    pub analysing_demos: HashSet<PathBuf>,
+    pub analysed_demos: HashMap<AnalysedDemoID, MaybeAnalysedDemo>,
 
     pub demos_per_page: usize,
     pub page: usize,
@@ -54,7 +56,7 @@ pub struct State {
     pub viewing_player: Option<SteamID>,
     pub chart: KDAChart,
 
-    pub request_analysis: Sender<PathBuf>,
+    pub request_analysis: Sender<(PathBuf, progress::Updater)>,
     #[allow(clippy::pub_underscore_fields, clippy::type_complexity)]
     pub _demo_analysis_output: RefCell<Option<UnboundedReceiver<AnalysedDemoResult>>>,
 }
@@ -147,7 +149,7 @@ pub enum DemosMessage {
     Refresh,
     SetDemos(Vec<Demo>),
     SetPage(usize),
-    AnalyseDemo(PathBuf),
+    AnalyseDemo(usize),
     AnalyseAll,
     DemoAnalysed(AnalysedDemoResult),
 
@@ -172,6 +174,41 @@ impl From<DemosMessage> for Message {
     }
 }
 
+#[derive(Default)]
+pub enum MaybeAnalysedDemo {
+    Analysed(AnalysedDemo),
+    InProgress(progress::Checker),
+    #[default]
+    Uninit,
+}
+
+impl MaybeAnalysedDemo {
+    pub const fn get_demo(&self) -> Option<&AnalysedDemo> {
+        if let Self::Analysed(demo) = self {
+            return Some(demo);
+        }
+        None
+    }
+    pub const fn is_analysed(&self) -> bool {
+        if let Self::Analysed(_) = self {
+            return true;
+        }
+        false
+    }
+    pub const fn is_analyzing(&self) -> bool {
+        if let Self::InProgress(_) = self {
+            return true;
+        }
+        false
+    }
+    pub fn analysing_progress(&self) -> Option<Progress> {
+        if let Self::InProgress(checker) = self {
+            return Some(checker.check_progress());
+        }
+        None
+    }
+}
+
 impl State {
     #[must_use]
     pub fn new() -> Self {
@@ -181,7 +218,6 @@ impl State {
             demo_files: Vec::new(),
             demos_to_display: Vec::new(),
             analysed_demos: HashMap::new(),
-            analysing_demos: HashSet::new(),
 
             demos_per_page: 50,
             page: 0,
@@ -237,58 +273,78 @@ impl State {
                 }
                 return iced::Command::batch(commands);
             }
-            DemosMessage::AnalyseDemo(demo_path) => {
-                if state.demos.analysing_demos.contains(&demo_path) {
+            DemosMessage::AnalyseDemo(demo_index) => {
+                let Some(demo) = state.demos.demo_files.get(demo_index) else {
+                    return iced::Command::none();
+                };
+
+                if state
+                    .demos
+                    .analysed_demos
+                    .get(&demo.analysed)
+                    .is_some_and(|d| d.is_analysed() || d.is_analyzing())
+                {
                     return iced::Command::none();
                 }
 
-                state.demos.analysing_demos.insert(demo_path.clone());
+                let (updater, checker) = progress::create_pair();
+                state
+                    .demos
+                    .analysed_demos
+                    .insert(demo.analysed, MaybeAnalysedDemo::InProgress(checker));
+
                 state
                     .demos
                     .request_analysis
-                    .send(demo_path)
+                    .send((demo.path.clone(), updater))
                     .expect("Couldn't request analysis of demo. Demo analyser thread ded?");
             }
-            DemosMessage::DemoAnalysed((demo_path, analysed_demo)) => {
-                state.demos.analysing_demos.remove(&demo_path);
+            DemosMessage::DemoAnalysed((demo_path, analysed_demo)) => match analysed_demo {
+                Some((hash, analysed_demo)) => {
+                    state
+                        .demos
+                        .analysed_demos
+                        .insert(hash, MaybeAnalysedDemo::Analysed(*analysed_demo));
 
-                match analysed_demo {
-                    Some((hash, analysed_demo)) => {
-                        state.demos.analysed_demos.insert(hash, *analysed_demo);
-
-                        if let View::AnalysedDemo(demo) = state.settings.view {
-                            if state
-                                .demos
-                                .demo_files
-                                .get(demo)
-                                .is_some_and(|d| d.analysed == hash)
-                            {
-                                state.demos.chart =
-                                    KDAChart::new(state, demo, state.selected_player);
-                            }
+                    if let View::AnalysedDemo(demo) = state.settings.view {
+                        if state
+                            .demos
+                            .demo_files
+                            .get(demo)
+                            .is_some_and(|d| d.analysed == hash)
+                        {
+                            state.demos.chart = KDAChart::new(state, demo, state.selected_player);
                         }
+                    }
 
-                        tracing::debug!("Successfully got analysed demo {demo_path:?}");
-                    }
-                    None if !demo_path.as_os_str().is_empty() => {
-                        tracing::error!("Failed to analyse demo {demo_path:?}");
-                    }
-                    None => {}
+                    tracing::debug!("Successfully got analysed demo {demo_path:?}");
                 }
-            }
+                None if !demo_path.as_os_str().is_empty() => {
+                    tracing::error!("Failed to analyse demo {demo_path:?}");
+                }
+                None => {}
+            },
             DemosMessage::AnalyseAll => {
                 for d in &state.demos.demo_files {
-                    if state.demos.analysed_demos.contains_key(&d.analysed)
-                        || state.demos.analysing_demos.contains(&d.path)
+                    if state
+                        .demos
+                        .analysed_demos
+                        .get(&d.analysed)
+                        .is_some_and(|d| d.is_analyzing() || d.is_analysed())
                     {
                         continue;
                     }
 
-                    state.demos.analysing_demos.insert(d.path.clone());
+                    let (updater, checker) = progress::create_pair();
+                    state
+                        .demos
+                        .analysed_demos
+                        .insert(d.analysed, MaybeAnalysedDemo::InProgress(checker));
+
                     state
                         .demos
                         .request_analysis
-                        .send(d.path.clone())
+                        .send((d.path.clone(), updater))
                         .expect("Couldn't request analysis of demo. Demo analyser thread ded?");
                 }
             }
@@ -445,7 +501,10 @@ impl Default for State {
 
 // Spawn a thread with a thread pool to analyse demos. Requests for demos to be analysed
 // can be sent over the channel and their result will eventually come back over the other one.
-fn spawn_demo_analyser_thread() -> (Sender<PathBuf>, UnboundedReceiver<AnalysedDemoResult>) {
+fn spawn_demo_analyser_thread() -> (
+    Sender<(PathBuf, progress::Updater)>,
+    UnboundedReceiver<AnalysedDemoResult>,
+) {
     let (request_tx, request_rx) = std::sync::mpsc::channel();
     let (completed_tx, completed_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -453,7 +512,7 @@ fn spawn_demo_analyser_thread() -> (Sender<PathBuf>, UnboundedReceiver<AnalysedD
     std::thread::spawn(move || {
         let pool = ThreadPool::new(num_cpus::get().saturating_sub(2).max(1));
 
-        while let Ok(demo_path) = request_rx.recv() {
+        while let Ok((demo_path, progress)) = request_rx.recv() {
             tracing::debug!("Received request to analyse {demo_path:?}");
             let tx = completed_tx.clone();
             pool.execute(move || {
@@ -467,7 +526,7 @@ fn spawn_demo_analyser_thread() -> (Sender<PathBuf>, UnboundedReceiver<AnalysedD
                         let mut bytes = Vec::new();
                         let _ = f.read_to_end(&mut bytes).ok()?;
                         let hash = demo_analyser::hash_demo(&bytes, created);
-                        let demo = demo_analyser::AnalysedDemo::new(&bytes).ok()?;
+                        let demo = demo_analyser::AnalysedDemo::new(&bytes, Some(progress)).ok()?;
                         Some((hash, Box::new(demo)))
                     });
 
@@ -568,7 +627,11 @@ impl Filters {
                     return true;
                 }
 
-                let analysed = state.demos.analysed_demos.get(&d.analysed);
+                let analysed = state
+                    .demos
+                    .analysed_demos
+                    .get(&d.analysed)
+                    .and_then(|d| d.get_demo());
 
                 for term in self.search.split_whitespace() {
                     let lower_term = term.to_lowercase();
@@ -607,7 +670,12 @@ impl Filters {
                 }
 
                 // Can't check players in demos that aren't analysed
-                let Some(analysed) = state.demos.analysed_demos.get(&d.analysed) else {
+                let Some(analysed) = state
+                    .demos
+                    .analysed_demos
+                    .get(&d.analysed)
+                    .and_then(|d| d.get_demo())
+                else {
                     return false;
                 };
 

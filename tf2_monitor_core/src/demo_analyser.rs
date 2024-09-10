@@ -15,12 +15,16 @@ use tf_demo_parser::{
         message::{gameevent::GameEventMessage, Message},
         packet::{message::MessagePacket, Packet},
         parser::{
-            analyser::Class, gamestateanalyser::GameStateAnalyser, DemoHandler, RawPacketStream,
+            analyser::{Class, Team},
+            gamestateanalyser::GameStateAnalyser,
+            DemoHandler, RawPacketStream,
         },
     },
     Demo, ParseError,
 };
 use tokio::io::AsyncReadExt;
+
+pub mod progress;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysedDemo {
@@ -50,14 +54,42 @@ pub struct DemoPlayer {
     pub deaths: Vec<usize>,
     pub most_played_classes: Vec<Class>,
     pub highest_killstreak: Option<(u32, Class)>,
+    /// Sequence of which classes the player was playing as, and for how many ticks.
+    /// To find what class they were at a given tick, iterate and sum the number of
+    /// ticks until it is greater than the tick being checked, and that will be the class.
+    pub ticks_on_classes: Vec<ClassPeriod>,
 
     /// Information about a player's experience as each class during a match.
     /// Indexed by `tf_demo_parser::demo::parser::analyser::Class`
     pub class_details: [ClassDetails; 10],
     /// Number of seconds, indexed by `tf_demo_parser::demo::parser::analyser::Team`
     pub time_on_team: [u32; 4],
+    /// Sequence of which team the player was on, and for how many ticks.
+    /// To find what team they were on at a given tick, iterate and sum the number of
+    /// ticks until it is greater than the tick being checked, and that will be the team.
+    pub ticks_on_teams: Vec<TeamPeriod>,
     pub time: u32,
     pub average_ping: u64,
+    pub first_tick: u32,
+    pub last_tick: u32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct TeamPeriod {
+    pub team: Team,
+    /// Starting tick
+    pub start: u32,
+    /// How many ticks
+    pub duration: u32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ClassPeriod {
+    pub class: Class,
+    /// Starting tick
+    pub start: u32,
+    /// How many ticks
+    pub duration: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -94,6 +126,28 @@ pub enum Error {
     ParseError(#[from] ParseError),
 }
 
+impl DemoPlayer {
+    #[must_use]
+    pub fn class_during_tick(&self, tick: u32) -> Option<Class> {
+        for p in &self.ticks_on_classes {
+            if tick >= p.start && tick - p.start <= p.duration {
+                return Some(p.class);
+            }
+        }
+        None
+    }
+
+    #[must_use]
+    pub fn team_during_tick(&self, tick: u32) -> Option<Team> {
+        for p in &self.ticks_on_teams {
+            if tick >= p.start && tick - p.start <= p.duration {
+                return Some(p.team);
+            }
+        }
+        None
+    }
+}
+
 impl AnalysedDemo {
     /// Takes in a slice of bytes making up a demo and attempts to extract some useful information from it.
     /// Extracted information includes:
@@ -104,10 +158,14 @@ impl AnalysedDemo {
     ///   * Most played classes
     ///   * Amount of kills / assists / deaths and time spent on each class
     ///   * Average ping
+    ///
+    /// A `progress` field is only for if you would like to be able to check on the progress of
+    /// demo analysis, and can safely be given `None` otherwise.
+    ///
     /// # Errors
     /// If the demo failed to parse for some reason
     #[allow(clippy::too_many_lines)]
-    pub fn new(demo_bytes: &[u8]) -> Result<Self, Error> {
+    pub fn new(demo_bytes: &[u8], mut progress: Option<progress::Updater>) -> Result<Self, Error> {
         let demo = Demo::new(demo_bytes);
         let mut stream = demo.get_stream();
 
@@ -124,11 +182,19 @@ impl AnalysedDemo {
             events: Vec::new(),
         };
 
+        // Total number of bits in the demo
+        let progress_total = (demo_bytes.len() * 8) as f32;
+        // Number of bits processed at the time of the last progress update
+        let mut last_progress_update = 0;
+        // Number of bits to process between progress updates
+        const PROGRESS_INTERVAL: usize = 100_000;
+
         // Do the gameplay analysis
 
         let mut handler = DemoHandler::with_analyser(GameStateAnalyser::new());
 
         let mut packets = RawPacketStream::new(stream);
+        let mut initial_server_tick = ServerTick::from(0u32);
         let mut last_tick = ServerTick::from(0u32);
         let mut num_ticks_checked = 0u64;
         let mut last_kills_len = 0;
@@ -197,12 +263,25 @@ impl AnalysedDemo {
                 continue;
             }
 
+            // Update progress
+            let current_progress_bytes = packets.pos();
+            if current_progress_bytes - last_progress_update >= PROGRESS_INTERVAL {
+                last_progress_update = current_progress_bytes;
+                if let Some(updater) = &mut progress {
+                    updater.update_progress(progress::Progress::InProgress(
+                        last_progress_update as f32 / progress_total,
+                    ));
+                }
+            }
+
             let tick_delta = if last_tick == 0 {
+                initial_server_tick = handler.server_tick;
                 ServerTick::from(0)
             } else {
                 handler.server_tick - last_tick
             };
             last_tick = handler.server_tick;
+            let current_tick = last_tick - initial_server_tick;
             num_ticks_checked += 1;
 
             let game_state = handler.borrow_output();
@@ -253,10 +332,40 @@ impl AnalysedDemo {
                 // Add player if they don't exist
                 let player = analysed_demo.players.entry(steamid).or_default();
 
+                if player.first_tick == 0 {
+                    player.first_tick = u32::from(current_tick);
+                }
+                player.last_tick = u32::from(current_tick);
+
                 // Update class and team info
                 player.class_details[p.class as usize].time += u32::from(tick_delta);
                 player.time_on_team[p.team as usize] += u32::from(tick_delta);
                 player.time += u32::from(tick_delta);
+
+                match player.ticks_on_teams.last_mut() {
+                    Some(period) if period.team == p.team => {
+                        period.duration += u32::from(tick_delta);
+                    }
+                    _ => {
+                        player.ticks_on_teams.push(TeamPeriod {
+                            team: p.team,
+                            start: u32::from(current_tick),
+                            duration: 0,
+                        });
+                    }
+                }
+                match player.ticks_on_classes.last_mut() {
+                    Some(period) if period.class == p.class => {
+                        period.duration += u32::from(tick_delta);
+                    }
+                    _ => {
+                        player.ticks_on_classes.push(ClassPeriod {
+                            class: p.class,
+                            start: u32::from(current_tick),
+                            duration: 0,
+                        });
+                    }
+                }
 
                 // Add ping
                 player.average_ping += u64::from(p.ping);
@@ -366,6 +475,11 @@ impl AnalysedDemo {
             });
             p.time = (p.time as f32 * analysed_demo.interval_per_tick) as u32;
         });
+
+        // Update progress
+        if let Some(updater) = &mut progress {
+            updater.update_progress(progress::Progress::Finished);
+        }
 
         Ok(analysed_demo)
     }

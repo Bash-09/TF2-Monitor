@@ -6,7 +6,7 @@ use iced::{
 };
 
 use crate::{
-    demos::{DemosMessage, SORT_DIRECTIONS, SORT_OPTIONS},
+    demos::{DemosMessage, MaybeAnalysedDemo, SORT_DIRECTIONS, SORT_OPTIONS},
     App, IcedElement, Message,
 };
 
@@ -140,7 +140,12 @@ fn demo_list_row(state: &App, demo_index: usize) -> IcedElement<'_> {
         .spacing(15);
 
     // Analysed
-    if let Some(analysed) = state.demos.analysed_demos.get(&demo.analysed) {
+    if let Some(analysed) = state
+        .demos
+        .analysed_demos
+        .get(&demo.analysed)
+        .and_then(|d| d.get_demo())
+    {
         let hostname = if analysed.server_name.len() > 30 {
             let mut host = analysed.server_name.split_at(27).0.to_string();
             host.push_str("...");
@@ -220,16 +225,31 @@ fn demo_list_row(state: &App, demo_index: usize) -> IcedElement<'_> {
                 .width(70),
         );
     } else {
-        let analysing = state.demos.analysing_demos.contains(&demo.path);
+        let analysing = state.demos.analysed_demos.get(&demo.analysed);
+        let not_analysed = analysing.is_none();
+        let progress = analysing.and_then(MaybeAnalysedDemo::analysing_progress);
 
-        let mut analyse_button = widget::button(widget::text("Analyse demo").size(FONT_SIZE));
+        let analyse_widget: IcedElement<'_> = if not_analysed {
+            widget::button(widget::text("Analyse demo").size(FONT_SIZE))
+                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo_index)))
+                .into()
+        } else if let Some(progress) = progress {
+            match progress {
+                tf2_monitor_core::demo_analyser::progress::Progress::Queued => {
+                    widget::text("Queued...").into()
+                }
+                tf2_monitor_core::demo_analyser::progress::Progress::InProgress(amount) => {
+                    widget::progress_bar(0.0..=1.0, amount).into()
+                }
+                tf2_monitor_core::demo_analyser::progress::Progress::Finished => {
+                    widget::text("Done...").into()
+                }
+            }
+        } else {
+            widget::text("Should be analysed?").into()
+        };
 
-        if !analysing {
-            analyse_button = analyse_button
-                .on_press(Message::Demos(DemosMessage::AnalyseDemo(demo.path.clone())));
-        }
-
-        contents = contents.push(analyse_button);
+        contents = contents.push(widget::container(analyse_widget).width(200));
         contents = contents.push(widget::text(&demo.name).width(Length::FillPortion(2)));
         contents = contents.push(widget::text(recorded_ago_str).width(Length::FillPortion(1)));
         contents = contents.push(

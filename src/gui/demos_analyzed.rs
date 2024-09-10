@@ -8,7 +8,9 @@ use iced::{
     Length,
 };
 use plotters_iced::ChartWidget;
-use tf2_monitor_core::{demo_analyser::AnalysedDemo, steamid_ng::SteamID};
+use tf2_monitor_core::{
+    demo_analyser::AnalysedDemo, steamid_ng::SteamID, tf_demo_parser::demo::parser::analyser::Class,
+};
 
 use crate::{
     demos::{AnalysedDemoView, CLASSES},
@@ -77,7 +79,12 @@ pub fn analysed_demo_view(state: &App, demo_index: usize) -> IcedElement<'_> {
     .width(Length::Fill)
     .spacing(15);
 
-    let Some(analysed) = state.demos.analysed_demos.get(&demo.analysed) else {
+    let Some(analysed) = state
+        .demos
+        .analysed_demos
+        .get(&demo.analysed)
+        .and_then(|d| d.get_demo())
+    else {
         contents = contents.push(widget::text("Demo not analysed"));
         return contents.into();
     };
@@ -149,6 +156,49 @@ fn detailed_player_view<'a>(state: &'a App, analysed: &AnalysedDemo) -> IcedElem
         return invalid_view(state);
     };
 
+    let chart_width = 800.0;
+    let chart_margin = 30.0;
+    let scale = (chart_width - chart_margin)
+        / (state
+            .demos
+            .chart
+            .last_tick
+            .saturating_sub(state.demos.chart.first_tick)
+            .max(1)) as f32;
+
+    let mut classes_timeline = widget::row![widget::Space::with_width(chart_margin)]
+        .width(chart_width)
+        .height(PFP_SMALL_SIZE);
+
+    // let total_ticks = (state.demos.chart.last_tick - state.demos.chart.first_tick) as f32;
+    let mut last = state.demos.chart.first_tick;
+    for period in &state.demos.chart.ticks_on_classes {
+        if period.class == Class::Other {
+            continue;
+        }
+
+        let space = ((period.start.saturating_sub(last)) as f32 * scale) as u16;
+        let width = (period.duration as f32 * scale) as u16;
+
+        classes_timeline = classes_timeline.push(widget::vertical_rule(1));
+
+        if period.start.saturating_sub(last) > 1000 {
+            classes_timeline =
+                classes_timeline.push(widget::Space::with_width(Length::FillPortion(space)));
+            classes_timeline = classes_timeline.push(widget::vertical_rule(1));
+        }
+
+        classes_timeline = classes_timeline.push(tooltip(
+            icon(icons::CLASS[period.class as usize])
+                .style(colours::orange())
+                .width(Length::FillPortion(width))
+                .vertical_alignment(iced::alignment::Vertical::Center),
+            widget::text(format!("{}", period.class)),
+        ));
+        last = period.start + period.duration;
+    }
+    classes_timeline = classes_timeline.push(widget::vertical_rule(1));
+
     widget::column![
         widget::row![
             widget::text(&p.name),
@@ -161,11 +211,15 @@ fn detailed_player_view<'a>(state: &'a App, analysed: &AnalysedDemo) -> IcedElem
         ]
         .align_items(iced::Alignment::Center)
         .spacing(50),
-        widget::scrollable(
-            ChartWidget::new(&state.demos.chart)
-                .width(Length::Fixed(800.0))
-                .height(Length::Fixed(400.0))
-        )
+        widget::scrollable(widget::row![
+            widget::column![
+                classes_timeline,
+                ChartWidget::new(&state.demos.chart).height(Length::Fixed(400.0)),
+            ]
+            .width(Length::Fixed(chart_width)),
+            widget::Space::with_width(5)
+        ])
+        .width(Length::Fill)
         .direction(widget::scrollable::Direction::Vertical(
             Properties::default()
         )),

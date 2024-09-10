@@ -1,13 +1,20 @@
 use iced::Length;
 use plotters::{
     element::Rectangle,
-    series::LineSeries,
+    series::{AreaSeries, LineSeries},
     style::{IntoFont, RGBAColor, RGBColor, BLUE, GREEN, RED},
 };
 use plotters_iced::{Chart, ChartWidget};
-use tf2_monitor_core::{demo_analyser::Death, steamid_ng::SteamID};
+use tf2_monitor_core::{
+    demo_analyser::{ClassPeriod, Death, TeamPeriod},
+    steamid_ng::SteamID,
+    tf_demo_parser::demo::parser::analyser::Team,
+};
 
-use crate::{App, IcedElement, Message};
+use crate::{
+    gui::styles::colours::{team_blu, team_red},
+    App, IcedElement, Message,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct KDAChart {
@@ -16,7 +23,10 @@ pub struct KDAChart {
     pub d: Vec<usize>,
     pub a: Vec<usize>,
     pub col: RGBAColor,
-    pub player: String,
+    pub ticks_on_classes: Vec<ClassPeriod>,
+    pub ticks_on_teams: Vec<TeamPeriod>,
+    pub first_tick: u32,
+    pub last_tick: u32,
 }
 
 impl KDAChart {
@@ -40,34 +50,31 @@ impl KDAChart {
             .get(demo)
             .map(|d| &d.analysed)
             .and_then(|d| state.demos.analysed_demos.get(d))
+            .and_then(|d| d.get_demo())
         {
             let mut player = player.unwrap_or(analysed_demo.user);
             if !analysed_demo.players.contains_key(&player) {
                 player = analysed_demo.user;
             }
 
-            chart.player = analysed_demo
-                .players
-                .get(&player)
-                .map(|p| p.name.clone())
-                .unwrap_or_default();
+            let Some(analysed_player) = analysed_demo.players.get(&player) else {
+                return chart;
+            };
+
+            // chart.player = analysed_demo
+            //     .players
+            //     .get(&player)
+            //     .map(|p| p.name.clone())
+            //     .unwrap_or_default();
 
             chart.kills = analysed_demo.kills.clone();
-            chart.k = analysed_demo
-                .players
-                .get(&player)
-                .map(|p| p.kills.clone())
-                .unwrap_or_default();
-            chart.d = analysed_demo
-                .players
-                .get(&player)
-                .map(|p| p.deaths.clone())
-                .unwrap_or_default();
-            chart.a = analysed_demo
-                .players
-                .get(&player)
-                .map(|p| p.assists.clone())
-                .unwrap_or_default();
+            chart.k = analysed_player.kills.clone();
+            chart.d = analysed_player.deaths.clone();
+            chart.a = analysed_player.assists.clone();
+            chart.ticks_on_teams = analysed_player.ticks_on_teams.clone();
+            chart.ticks_on_classes = analysed_player.ticks_on_classes.clone();
+            chart.first_tick = analysed_player.first_tick;
+            chart.last_tick = analysed_player.last_tick;
         }
 
         chart
@@ -82,13 +89,13 @@ impl Chart<Message> for KDAChart {
         state: &Self::State,
         mut chart: plotters::prelude::ChartBuilder<DB>,
     ) {
-        let last_tick = self.kills.last().map(|k| k.tick.0).unwrap_or(0);
-        let num_kills = self.k.len().max(self.d.len().max(self.a.len()));
+        let max_kills = self.k.len().max(self.d.len().max(self.a.len()));
+
         let mut chart = chart
             .margin(10)
             .x_label_area_size(50)
             .y_label_area_size(20)
-            .build_cartesian_2d(0..last_tick, 0..num_kills)
+            .build_cartesian_2d(self.first_tick..self.last_tick, 0..max_kills)
             .unwrap();
         let col_rgb = RGBColor(self.col.0, self.col.1, self.col.2);
         let text_style = ("sans-serif", 13).into_font().color(&col_rgb);
@@ -105,6 +112,37 @@ impl Chart<Message> for KDAChart {
             .bold_line_style(self.col)
             .draw()
             .unwrap();
+
+        // Team backgrounds
+        let tick = self.first_tick;
+        for p in &self.ticks_on_teams {
+            let red = team_red();
+            let blu = team_blu();
+            let team_col = match p.team {
+                Team::Other => RGBAColor(0, 0, 0, 0.0),
+                Team::Spectator => RGBAColor(128, 128, 128, 0.2),
+                Team::Red => RGBAColor(
+                    (red.r * 255.0) as u8,
+                    (red.g * 255.0) as u8,
+                    (red.b * 255.0) as u8,
+                    0.2,
+                ),
+                Team::Blue => RGBAColor(
+                    (blu.r * 255.0) as u8,
+                    (blu.g * 255.0) as u8,
+                    (blu.b * 255.0) as u8,
+                    0.2,
+                ),
+            };
+
+            chart
+                .draw_series(AreaSeries::new(
+                    [(p.start, max_kills), (p.start + p.duration, max_kills)],
+                    0,
+                    team_col,
+                ))
+                .unwrap();
+        }
 
         const POINT_SIZE: u32 = 2;
 
@@ -155,6 +193,16 @@ impl Chart<Message> for KDAChart {
             .unwrap()
             .label("Assists")
             .legend(|(x, y)| Rectangle::new([(x, y + 2), (x + 15, y + 1)], BLUE));
+
+        // Crit kills
+        // chart.draw_series(PointSeries::new(
+        //             self.a
+        //                 .iter()
+        //                 .enumerate()
+        //                 .map(|(i, &a)| (self.kills[a].tick.0, i + 1)),
+        //     POINT_SIZE,
+        //     YELLOW
+        // )).unwrap();
 
         chart
             .configure_series_labels()

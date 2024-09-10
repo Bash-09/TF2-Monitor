@@ -31,7 +31,7 @@ pub mod colours {
 
     #[must_use]
     pub const fn green() -> Color {
-        Color::from_rgb(0.2, 1.0, 0.2)
+        Color::from_rgb(0.2, 8.0, 0.2)
     }
 
     #[must_use]
