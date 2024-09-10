@@ -1,7 +1,4 @@
-use std::{
-    cell::UnsafeCell,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Progress {
@@ -12,7 +9,6 @@ pub enum Progress {
 
 pub struct Checker {
     inner: Arc<Mutex<Progress>>,
-    buffer: UnsafeCell<Progress>,
 }
 
 pub struct Updater {
@@ -21,18 +17,7 @@ pub struct Updater {
 
 impl Checker {
     pub fn check_progress(&self) -> Progress {
-        // SAFETY:
-        // Because `ProgressChecker` is `!Sync`, all calls to `check_progress` (the only place
-        // where the `UnsafeCell` is accessed) will be synchronous and exclusive access is guaranteed.
-        if let Ok(progress) = self.inner.try_lock() {
-            unsafe {
-                *(self.buffer.get()) = *progress;
-            }
-        } else {
-            tracing::info!("Is there actually any lock contention?");
-        }
-
-        unsafe { *self.buffer.get() }
+        *self.inner.lock().expect("Epic fail")
     }
 }
 
@@ -50,9 +35,6 @@ pub fn create_pair() -> (Updater, Checker) {
         Updater {
             inner: inner.clone(),
         },
-        Checker {
-            inner,
-            buffer: UnsafeCell::new(Progress::Queued),
-        },
+        Checker { inner },
     )
 }
