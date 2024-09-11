@@ -28,10 +28,10 @@ use settings::{AppSettings, PanelSide, SETTINGS_IDENTIFIER};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use tf2_monitor_core::{
-    console::{commands::{Command, CommandManager, DumbAutoKick}, ConsoleLog, ConsoleOutput, ConsoleParser, RawConsoleOutput}, demos::{analyser::AnalysedDemo, DemoBytes, DemoManager, DemoMessage, DemoWatcher}, event_loop::{self, define_events, EventLoop, MessageSource}, events::{Preferences, Refresh, UserUpdates}, masterbase, players::{new_players::{ExtractNewPlayers, NewPlayers}, records::{Records, Verdict}, Players}, server::Server, settings::{AppDetails, Settings}, steam::api::{
+    console::{commands::{Command, CommandManager, DumbAutoKick}, ConsoleLog, ConsoleOutput, ConsoleParser, RawConsoleOutput}, demos::{analyser::AnalysedDemo, DemoBytes, DemoManager, DemoMessage, DemoWatcher}, event_loop::{self, define_events, EventLoop, MessageSource}, events::{Preferences, Refresh, UserUpdates}, masterbase, players::{new_players::{ExtractNewPlayers, NewPlayers}, records::{Records, Verdict}, Players}, server::Server, settings::{AppDetails, Settings}, steam::{self, api::{
         FriendLookupResult, LookupFriends, LookupProfiles, ProfileLookupBatchTick,
         ProfileLookupRequest, ProfileLookupResult,
-    }, steamid_ng::SteamID, MonitorState
+    }}, steamid_ng::SteamID, MonitorState
 };
 
 pub mod gui;
@@ -783,11 +783,19 @@ fn main() {
     })).expect("Failed to load player records. Please fix any issues mentioned and try again.");
     playerlist.save_ok();
 
-    let players = Players::new(
+    let mut players = Players::new(
         playerlist,
         settings.steam_user,
         Players::default_steam_cache_path(APP).ok(),
     );
+
+    // Local friends
+    if let Some(user) = settings.steam_user {
+        match steam::find_steam_user_friends(user) {
+            Ok(friends) => players.update_friends_list(user, friends),
+            Err(e) => tracing::error!("Failed to check local player's friends: {e}"),
+        }
+    }
 
     let core = MonitorState {
         server: Server::new(),

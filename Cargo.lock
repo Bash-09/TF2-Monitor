@@ -2454,20 +2454,6 @@ dependencies = [
 
 [[package]]
 name = "keyvalues-serde"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da419ac133bb3ddf0dbf9c12fcc0ce01d994fcb65f6f1713faf15cc689320b5f"
-dependencies = [
- "keyvalues-parser 0.1.0",
- "once_cell",
- "paste",
- "regex",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "keyvalues-serde"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0447866c47c00f8bd1949618e8f63017cf93e985b4684dc28d784527e2882390"
@@ -4686,7 +4672,7 @@ dependencies = [
  "crc",
  "dirs",
  "keyvalues-parser 0.2.0",
- "keyvalues-serde 0.2.1",
+ "keyvalues-serde",
  "serde",
  "winreg 0.51.0",
 ]
@@ -4956,7 +4942,6 @@ dependencies = [
  "futures",
  "include_dir",
  "keyvalues-parser 0.1.0",
- "keyvalues-serde 0.1.0",
  "md5",
  "notify",
  "open",

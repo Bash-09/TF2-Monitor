@@ -4,6 +4,8 @@ use keyvalues_parser::Vdf;
 use steamid_ng::SteamID;
 use steamlocate::SteamDir;
 
+use crate::players::friends::Friend;
+
 pub mod api;
 pub mod launch_options;
 
@@ -70,6 +72,42 @@ pub fn find_current_steam_user() -> Result<SteamID, Error> {
     }
 
     latest_user_sid64.ok_or(Error::NoValidUser)
+}
+
+/// Attempts to find the given user's friend list by reading the local steam config files.
+///
+/// # Errors
+/// * If the given steam user does not have any local configs
+/// * If the config files for the player are not valid or complete
+/// * IO errors
+pub fn find_steam_user_friends(steamid: SteamID) -> Result<Vec<Friend>, Error> {
+    #[allow(clippy::unreadable_literal)]
+    let id_32 = u64::from(steamid) & 0xFFFFFFFF;
+
+    let user_conf_path = SteamDir::locate()?
+        .path()
+        .join(format!("userdata/{id_32}/config/localconfig.vdf"));
+    let user_conf_contents = std::fs::read(user_conf_path)?;
+    let user_conf_string = String::from_utf8_lossy(&user_conf_contents);
+    let user_vdf = Vdf::parse(&user_conf_string)?;
+
+    let friends = user_vdf
+        .value
+        .get_obj()
+        .ok_or(Error::InvalidStructure)?
+        .get("friends")
+        .ok_or(Error::InvalidStructure)?
+        .iter()
+        .filter_map(|v| v.get_obj())
+        .flat_map(|o| o.keys())
+        .filter_map(|s| SteamID::from_steam3(format!("[U:1:{s}]").as_str()).ok())
+        .map(|steamid| Friend {
+            steamid,
+            friend_since: 0,
+        })
+        .collect();
+
+    Ok(friends)
 }
 
 /// # Errors
