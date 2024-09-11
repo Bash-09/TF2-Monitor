@@ -197,7 +197,7 @@ impl Application for App {
         };
 
         let (tf2_dir_tx, tf2_dir_rx) = tokio::sync::broadcast::channel(1);
-        let app = Self {
+        let mut app = Self {
             mac,
             event_loop,
             settings,
@@ -219,6 +219,8 @@ impl Application for App {
             change_tf2_dir: tf2_dir_tx,
             _tf2_dir_changed: RefCell::new(Some(tf2_dir_rx)),
         };
+
+        app.update_displayed_records();
 
         commands.push(demos::State::refresh_demos(&app));
 
