@@ -10,7 +10,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tf2_monitor_core::{
-    demo_analyser::{
+    demos::analyser::{
         self,
         progress::{self, Progress},
         AnalysedDemo,
@@ -475,7 +475,7 @@ impl State {
                                 name: file_name,
                                 path: file_path,
                                 created,
-                                analysed: demo_analyser::hash_demo(&header_bytes, created),
+                                analysed: analyser::hash_demo(&header_bytes, created),
                                 file_size: metadata.len(),
                             })
                         });
@@ -529,8 +529,8 @@ fn spawn_demo_analyser_thread() -> (
                         let created = f.metadata().and_then(|m| m.created()).ok()?;
                         let mut bytes = Vec::new();
                         let _ = f.read_to_end(&mut bytes).ok()?;
-                        let hash = demo_analyser::hash_demo(&bytes, created);
-                        let demo = demo_analyser::AnalysedDemo::new(&bytes, Some(progress)).ok()?;
+                        let hash = analyser::hash_demo(&bytes, created);
+                        let demo = analyser::AnalysedDemo::new(&bytes, Some(progress)).ok()?;
                         Some((hash, Box::new(demo)))
                     });
 

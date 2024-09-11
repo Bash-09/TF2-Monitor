@@ -11,7 +11,7 @@ use thiserror::Error;
 use tokio::{net::TcpStream, sync::mpsc::Sender};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use crate::player_records::Verdict;
+use crate::players::records::Verdict;
 
 #[derive(Debug, Error)]
 pub enum Error {

@@ -6,7 +6,7 @@ use iced::{
     Color, Length,
 };
 use serde::{Deserialize, Serialize};
-use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
+use tf2_monitor_core::{players::records::Verdict, steamid_ng::SteamID};
 
 use crate::{settings::PanelSide, App, IcedElement, Message};
 

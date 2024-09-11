@@ -11,13 +11,19 @@ use serde::Deserialize;
 use thiserror::Error;
 use tokio::{net::TcpStream, sync::Mutex, time::timeout};
 
-use super::console::RawConsoleOutput;
 use crate::{
     events::Refresh,
-    player::{PlayerState, Team},
-    player_records::Verdict,
-    state::MonitorState,
+    players::{
+        game_info::{PlayerState, Team},
+        records::Verdict,
+    },
+    MonitorState,
 };
+
+use super::RawConsoleOutput;
+
+pub mod g15;
+pub mod regexes;
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

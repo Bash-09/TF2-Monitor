@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use steamid_ng::SteamID;
 use tokio::sync::mpsc::Receiver;
 
-use crate::{player_records::Verdict, settings::FriendsAPIUsage, state::MonitorState};
+use crate::{players::records::Verdict, settings::FriendsAPIUsage, MonitorState};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Refresh;

@@ -2,7 +2,7 @@ use iced::{
     widget::{self, text, text_input, Button, Scrollable, Space},
     Length,
 };
-use tf2_monitor_core::{player_records::Verdict, steamid_ng::SteamID};
+use tf2_monitor_core::{players::records::Verdict, steamid_ng::SteamID};
 
 use super::{copy_button, open_profile_button, verdict_picker, FONT_SIZE, PFP_SMALL_SIZE};
 use crate::{App, IcedElement, Message, ALIAS_KEY};

@@ -6,7 +6,7 @@ use plotters::{
 };
 use plotters_iced::{Chart, ChartWidget};
 use tf2_monitor_core::{
-    demo_analyser::{ClassPeriod, Death, TeamPeriod},
+    demos::analyser::{ClassPeriod, Death, TeamPeriod},
     steamid_ng::SteamID,
     tf_demo_parser::demo::parser::analyser::Team,
 };

@@ -6,7 +6,7 @@ use steamid_ng::SteamID;
 use substring::Substring;
 use tracing::Level;
 
-use crate::gamefinder::{locate_steam_launch_configs, TF2_GAME_ID};
+use crate::steam::{locate_steam_launch_configs, TF2_GAME_ID};
 
 /// `-condebug` enables the console.log file to be written to by the game.
 /// `-conclearlog` clears the console.log file on launch of TF2

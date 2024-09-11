@@ -15,7 +15,7 @@ struct OpenFile {
     pub file: File,
 }
 
-pub struct FileWatcher {
+pub struct Watcher {
     /// Used to reopen the file for the next bulk read
     file_path: PathBuf,
     /// The file currently being watched
@@ -23,7 +23,7 @@ pub struct FileWatcher {
     response_send: UnboundedSender<String>,
 }
 
-impl FileWatcher {
+impl Watcher {
     #[must_use]
     pub fn new(path: PathBuf) -> (UnboundedReceiver<String>, Self) {
         let (resp_tx, resp_rx) = unbounded_channel();

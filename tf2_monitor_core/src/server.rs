@@ -3,10 +3,12 @@ use steamid_ng::SteamID;
 use tf_demo_parser::demo::gameevent_gen::{VoteCastEvent, VoteOptionsEvent};
 
 use crate::{
-    console::ConsoleOutput,
-    demo::{DemoEvent, DemoMessage},
-    io::regexes::{self, ChatMessage, PlayerKill},
-    player::Players,
+    console::{
+        commands::regexes::{self, ChatMessage, PlayerKill},
+        ConsoleOutput,
+    },
+    demos::{DemoEvent, DemoMessage},
+    players::Players,
 };
 
 // Server

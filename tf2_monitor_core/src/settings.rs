@@ -11,7 +11,7 @@ use serde_json::{Map, Value};
 use steamid_ng::SteamID;
 use thiserror::Error;
 
-use crate::{gamefinder, player_records::Verdict};
+use crate::{players::records::Verdict, steam};
 
 pub const CONFIG_FILE_NAME: &str = "config.yaml";
 
@@ -35,7 +35,7 @@ pub enum ConfigFilesError {
     #[error("Pot({0})")]
     Pot(#[from] pot::Error),
     #[error("Failed to located game/user information: {0}")]
-    GameFinder(#[from] gamefinder::Error),
+    Steam(#[from] steam::Error),
     #[error("No config file path is set")]
     NoConfigSet,
 }
@@ -104,7 +104,7 @@ impl Settings {
     /// - Necessary information was missing
     #[allow(clippy::missing_panics_doc)]
     pub fn infer_tf2_directory(&mut self) -> Result<&Path, ConfigFilesError> {
-        let tf2_directory = gamefinder::locate_tf2_folder()?;
+        let tf2_directory = steam::locate_tf2_folder()?;
         self.tf2_directory = Some(tf2_directory);
 
         Ok(self
@@ -121,7 +121,7 @@ impl Settings {
     /// - Necessary information was missing
     /// - No viable steam user could be identified
     pub fn infer_steam_user(&mut self) -> Result<SteamID, ConfigFilesError> {
-        let steam_user = gamefinder::find_current_steam_user()?;
+        let steam_user = steam::find_current_steam_user()?;
         self.steam_user = Some(steam_user);
 
         Ok(steam_user)

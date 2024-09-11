@@ -29,10 +29,13 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::{
     events::UserUpdates,
     masterbase::{DemoSession, ReportReason},
-    new_players::NewPlayers,
+    players::new_players::NewPlayers,
     settings::Settings,
-    state::MonitorState,
+    MonitorState,
 };
+
+pub mod analyser;
+pub mod watcher;
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone)]

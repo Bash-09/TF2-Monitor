@@ -13,15 +13,19 @@ use steamid_ng::SteamID;
 use thiserror::Error;
 use tokio::task::JoinSet;
 
-use super::new_players::NewPlayers;
 use crate::{
     events::{InternalPreferences, Preferences, UserUpdates},
-    gamefinder::TF2_GAME_ID,
-    player::{Friend, SteamInfo},
-    player_records::{PlayerRecord, Verdict},
+    players::{
+        friends::Friend,
+        new_players::NewPlayers,
+        records::{PlayerRecord, Verdict},
+        steam_info::SteamInfo,
+    },
     settings::FriendsAPIUsage,
-    state::MonitorState,
+    MonitorState,
 };
+
+use super::TF2_GAME_ID;
 
 const BATCH_SIZE: usize = 20; // adjust as needed
 

@@ -5,8 +5,11 @@ use iced::{
     Alignment, Length,
 };
 use tf2_monitor_core::{
-    player::{GameInfo, PlayerState, ProfileVisibility, Team},
-    player_records::PlayerRecord,
+    players::{
+        game_info::{GameInfo, PlayerState, Team},
+        records::PlayerRecord,
+        steam_info::ProfileVisibility,
+    },
     steamid_ng::SteamID,
 };
 

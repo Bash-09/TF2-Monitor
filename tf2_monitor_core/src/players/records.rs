@@ -19,13 +19,13 @@ pub const RECORDS_FILE_NAME: &str = "playerlist.json";
 // PlayerList
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct PlayerRecords {
+pub struct Records {
     #[serde(skip)]
     pub path: Option<PathBuf>,
     pub records: HashMap<SteamID, PlayerRecord>,
 }
 
-impl PlayerRecords {
+impl Records {
     /// # Errors
     /// If the config directory could not be located (usually because no valid
     /// home directory was found)
@@ -117,7 +117,7 @@ impl PlayerRecords {
     }
 }
 
-impl Deref for PlayerRecords {
+impl Deref for Records {
     type Target = HashMap<SteamID, PlayerRecord>;
 
     fn deref(&self) -> &Self::Target {
@@ -125,7 +125,7 @@ impl Deref for PlayerRecords {
     }
 }
 
-impl DerefMut for PlayerRecords {
+impl DerefMut for Records {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.records
     }

@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::player::FriendInfo;
 use steamid_ng::SteamID;
+
+use super::friends::FriendInfo;
 
 pub struct Parties {
     parties: Vec<HashSet<SteamID>>,
@@ -109,8 +110,9 @@ mod test {
 
     use std::collections::{HashMap, HashSet};
 
-    use crate::player::{Friend, FriendInfo};
     use steamid_ng::SteamID;
+
+    use crate::players::friends::{Friend, FriendInfo};
 
     use super::Parties;
 

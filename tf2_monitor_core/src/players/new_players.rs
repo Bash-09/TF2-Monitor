@@ -1,8 +1,7 @@
 use event_loop::{try_get, Handled, Is, MessageHandler};
 use steamid_ng::SteamID;
 
-use super::console::ConsoleOutput;
-use crate::state::MonitorState;
+use crate::{console::ConsoleOutput, MonitorState};
 
 // Messages *********************
 

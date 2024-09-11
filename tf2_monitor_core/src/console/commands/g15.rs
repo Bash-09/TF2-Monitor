@@ -7,7 +7,7 @@ use regex::{Captures, Regex};
 use steamid_ng::SteamID;
 use thiserror::Error;
 
-use crate::player::Team;
+use crate::players::game_info::Team;
 
 #[derive(Debug, Error, Clone)]
 pub enum Error {

@@ -235,13 +235,13 @@ fn demo_list_row(state: &App, demo_index: usize) -> IcedElement<'_> {
                 .into()
         } else if let Some(progress) = progress {
             match progress {
-                tf2_monitor_core::demo_analyser::progress::Progress::Queued => {
+                tf2_monitor_core::demos::analyser::progress::Progress::Queued => {
                     widget::text("Queued...").into()
                 }
-                tf2_monitor_core::demo_analyser::progress::Progress::InProgress(amount) => {
+                tf2_monitor_core::demos::analyser::progress::Progress::InProgress(amount) => {
                     widget::progress_bar(0.0..=1.0, amount).into()
                 }
-                tf2_monitor_core::demo_analyser::progress::Progress::Finished => {
+                tf2_monitor_core::demos::analyser::progress::Progress::Finished => {
                     widget::text("Done...").into()
                 }
             }

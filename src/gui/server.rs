@@ -3,7 +3,7 @@ use iced::{
     Color, Length,
 };
 use tf2_monitor_core::{
-    player::{GameInfo, Team},
+    players::game_info::{GameInfo, Team},
     steamid_ng::SteamID,
 };
 

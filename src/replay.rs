@@ -7,8 +7,8 @@ use iced::widget;
 use image::{io::Reader, DynamicImage, GenericImage, GenericImageView, ImageFormat};
 use tf2_monitor_core::{
     bitbuffer::BitRead,
-    state::MonitorState,
     tf_demo_parser::{demo::header::Header, Demo},
+    MonitorState,
 };
 
 use crate::gui::replay::view;

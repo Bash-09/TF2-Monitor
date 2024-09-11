@@ -1,26 +1,44 @@
-pub mod command_manager;
 pub mod console;
-pub mod demo;
-pub mod demo_analyser;
+pub mod demos;
 pub mod events;
-pub mod gamefinder;
-pub mod io;
-pub mod launchoptions;
 pub mod masterbase;
-pub mod new_players;
-pub mod parties;
-pub mod player;
-pub mod player_records;
+pub mod players;
 pub mod server;
 pub mod settings;
-pub mod state;
-pub mod steam_api;
+pub mod steam;
+
+use console::ConsoleOutput;
+use players::Players;
+use server::Server;
+use settings::Settings;
 
 pub use bitbuffer;
-pub use clap;
 pub use event_loop;
 pub use md5;
 pub use rcon;
 pub use serde_json;
 pub use steamid_ng;
 pub use tf_demo_parser;
+
+#[allow(clippy::module_name_repetitions)]
+pub struct MonitorState {
+    pub server: Server,
+    pub settings: Settings,
+    pub players: Players,
+}
+
+impl MonitorState {
+    pub fn handle_console_output(&mut self, output: ConsoleOutput) {
+        use ConsoleOutput::{
+            Chat, DemoStop, Hostname, Kill, Map, PlayerCount, ServerIP, Status, G15,
+        };
+        match output {
+            Status(inner) => self.players.handle_status_line(inner),
+            G15(inner) => self.players.handle_g15(inner),
+            DemoStop(_) => {}
+            Chat(_) | Kill(_) | Hostname(_) | ServerIP(_) | Map(_) | PlayerCount(_) => {
+                self.server.handle_console_output(output);
+            }
+        }
+    }
+}

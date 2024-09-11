@@ -9,7 +9,8 @@ use iced::{
 };
 use plotters_iced::ChartWidget;
 use tf2_monitor_core::{
-    demo_analyser::AnalysedDemo, steamid_ng::SteamID, tf_demo_parser::demo::parser::analyser::Class,
+    demos::analyser::AnalysedDemo, steamid_ng::SteamID,
+    tf_demo_parser::demo::parser::analyser::Class,
 };
 
 use crate::{

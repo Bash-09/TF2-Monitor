@@ -4,6 +4,9 @@ use keyvalues_parser::Vdf;
 use steamid_ng::SteamID;
 use steamlocate::SteamDir;
 
+pub mod api;
+pub mod launch_options;
+
 pub const TF2_GAME_ID: u32 = 440;
 
 #[derive(Debug, thiserror::Error)]

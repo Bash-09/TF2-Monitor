@@ -3,9 +3,10 @@ use regex::Regex;
 use std::path::PathBuf;
 use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver};
 
-use crate::{
-    io::{
-        filewatcher::FileWatcher,
+use crate::MonitorState;
+
+use self::{
+    commands::{
         g15::{G15Player, Parser},
         regexes::{
             ChatMessage, DemoStop, Hostname, Map, PlayerCount, PlayerKill, ServerIP, StatusLine,
@@ -13,8 +14,11 @@ use crate::{
             REGEX_PLAYERCOUNT, REGEX_STATUS,
         },
     },
-    state::MonitorState,
+    watcher::Watcher,
 };
+
+pub mod commands;
+pub mod watcher;
 
 #[derive(Debug, Clone)]
 pub struct RawConsoleOutput(pub String);
@@ -45,7 +49,7 @@ impl ConsoleLog {
     /// If tokio fails to spawn the task.
     #[allow(clippy::unused_async)]
     pub async fn new(log_file_path: PathBuf) -> Self {
-        let (console_rx, mut log_watcher) = FileWatcher::new(log_file_path);
+        let (console_rx, mut log_watcher) = Watcher::new(log_file_path);
         tokio::task::spawn(async move {
             log_watcher.file_watch_loop().await;
         });

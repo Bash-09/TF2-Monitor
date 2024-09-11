@@ -7,7 +7,7 @@ use regex::Captures;
 use serde::{Deserialize, Serialize};
 use steamid_ng::SteamID;
 
-use crate::player::{serialize_maybe_steamid_as_string, PlayerState};
+use crate::players::{game_info::PlayerState, serialize_maybe_steamid_as_string};
 
 /*
     Useful commands:

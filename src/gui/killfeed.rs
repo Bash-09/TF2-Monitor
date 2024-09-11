@@ -2,7 +2,7 @@ use iced::{
     widget::{self, scrollable::Id, Container, Scrollable},
     Alignment, Length,
 };
-use tf2_monitor_core::player::Team;
+use tf2_monitor_core::players::game_info::Team;
 
 use crate::{App, IcedElement, Message};
 

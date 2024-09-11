@@ -11,9 +11,6 @@ use bytes::Bytes;
 use demos::DemosMessage;
 use graph::KDAChart;
 use replay::{ReplayMessage, ReplayState};
-use tf2_monitor_core::{
-    console::ConsoleLog, demo::DemoWatcher, demo_analyser::AnalysedDemo, event_loop::{self, define_events, EventLoop, MessageSource}, masterbase, player::Players, player_records::{PlayerRecords, Verdict}, server::Server, settings::{AppDetails, Settings}, state::MonitorState, steamid_ng::SteamID
-};
 use gui::{chat, icons::FONT_FILE, killfeed, records, SidePanel, View, PFP_FULL_SIZE, PFP_SMALL_SIZE};
 use iced::{
     event::Event,
@@ -31,15 +28,10 @@ use settings::{AppSettings, PanelSide, SETTINGS_IDENTIFIER};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use tf2_monitor_core::{
-    command_manager::{Command, CommandManager, DumbAutoKick},
-    console::{ConsoleOutput, ConsoleParser, RawConsoleOutput},
-    demo::{DemoBytes, DemoManager, DemoMessage},
-    events::{Preferences, Refresh, UserUpdates},
-    new_players::{ExtractNewPlayers, NewPlayers},
-    steam_api::{
+    console::{commands::{Command, CommandManager, DumbAutoKick}, ConsoleLog, ConsoleOutput, ConsoleParser, RawConsoleOutput}, demos::{analyser::AnalysedDemo, DemoBytes, DemoManager, DemoMessage, DemoWatcher}, event_loop::{self, define_events, EventLoop, MessageSource}, events::{Preferences, Refresh, UserUpdates}, masterbase, players::{new_players::{ExtractNewPlayers, NewPlayers}, records::{Records, Verdict}, Players}, server::Server, settings::{AppDetails, Settings}, steam::api::{
         FriendLookupResult, LookupFriends, LookupProfiles, ProfileLookupBatchTick,
         ProfileLookupRequest, ProfileLookupResult,
-    },
+    }, steamid_ng::SteamID, MonitorState
 };
 
 pub mod gui;
@@ -785,9 +777,9 @@ fn main() {
     }
 
     // Playerlist
-    let mut playerlist = PlayerRecords::load_or_create(PlayerRecords::default_file_location(APP).unwrap_or_else(|e| {
-        tracing::error!("Failed to find a suitable location to store player records ({e}). Records will be written to {}", tf2_monitor_core::player_records::RECORDS_FILE_NAME);
-        tf2_monitor_core::player_records::RECORDS_FILE_NAME.into()
+    let mut playerlist = Records::load_or_create(Records::default_file_location(APP).unwrap_or_else(|e| {
+        tracing::error!("Failed to find a suitable location to store player records ({e}). Records will be written to {}", tf2_monitor_core::players::records::RECORDS_FILE_NAME);
+        tf2_monitor_core::players::records::RECORDS_FILE_NAME.into()
     })).expect("Failed to load player records. Please fix any issues mentioned and try again.");
     playerlist.save_ok();
 
