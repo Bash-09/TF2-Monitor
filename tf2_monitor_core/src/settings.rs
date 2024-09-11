@@ -11,7 +11,7 @@ use serde_json::{Map, Value};
 use steamid_ng::SteamID;
 use thiserror::Error;
 
-use crate::{gamefinder, player_records::Verdict, web::UISource};
+use crate::{gamefinder, player_records::Verdict};
 
 pub const CONFIG_FILE_NAME: &str = "config.yaml";
 
@@ -92,8 +92,6 @@ pub struct Settings {
 
     pub webui_port: u16,
     pub autolaunch_ui: bool,
-    #[serde(skip)]
-    pub web_ui_source: UISource,
 }
 
 #[allow(dead_code)]
@@ -248,7 +246,6 @@ impl Default for Settings {
             minimal_demo_parsing: false,
             masterbase_http: false,
             autokick_bots: false,
-            web_ui_source: UISource::default(),
         }
     }
 }

@@ -67,12 +67,16 @@ impl KDAChart {
             //     .map(|p| p.name.clone())
             //     .unwrap_or_default();
 
-            chart.kills = analysed_demo.kills.clone();
-            chart.k = analysed_player.kills.clone();
-            chart.d = analysed_player.deaths.clone();
-            chart.a = analysed_player.assists.clone();
-            chart.ticks_on_teams = analysed_player.ticks_on_teams.clone();
-            chart.ticks_on_classes = analysed_player.ticks_on_classes.clone();
+            chart.kills.clone_from(&analysed_demo.kills);
+            chart.k.clone_from(&analysed_player.kills);
+            chart.d.clone_from(&analysed_player.deaths);
+            chart.a.clone_from(&analysed_player.assists);
+            chart
+                .ticks_on_teams
+                .clone_from(&analysed_player.ticks_on_teams);
+            chart
+                .ticks_on_classes
+                .clone_from(&analysed_player.ticks_on_classes);
             chart.first_tick = analysed_player.first_tick;
             chart.last_tick = analysed_player.last_tick;
         }
@@ -86,9 +90,11 @@ impl Chart<Message> for KDAChart {
 
     fn build_chart<DB: plotters::prelude::DrawingBackend>(
         &self,
-        state: &Self::State,
+        _state: &Self::State,
         mut chart: plotters::prelude::ChartBuilder<DB>,
     ) {
+        const POINT_SIZE: u32 = 2;
+
         let max_kills = self.k.len().max(self.d.len().max(self.a.len()));
 
         let mut chart = chart
@@ -96,7 +102,7 @@ impl Chart<Message> for KDAChart {
             .x_label_area_size(50)
             .y_label_area_size(20)
             .build_cartesian_2d(self.first_tick..self.last_tick, 0..max_kills)
-            .unwrap();
+            .expect("Chart stuff");
         let col_rgb = RGBColor(self.col.0, self.col.1, self.col.2);
         let text_style = ("sans-serif", 13).into_font().color(&col_rgb);
 
@@ -111,10 +117,9 @@ impl Chart<Message> for KDAChart {
             .axis_style(col_rgb)
             .bold_line_style(self.col)
             .draw()
-            .unwrap();
+            .expect("Chart stuff");
 
         // Team backgrounds
-        let tick = self.first_tick;
         for p in &self.ticks_on_teams {
             let red = team_red();
             let blu = team_blu();
@@ -141,10 +146,8 @@ impl Chart<Message> for KDAChart {
                     0,
                     team_col,
                 ))
-                .unwrap();
+                .expect("Chart stuff");
         }
-
-        const POINT_SIZE: u32 = 2;
 
         // Kills
         chart
@@ -158,7 +161,7 @@ impl Chart<Message> for KDAChart {
                 )
                 .point_size(POINT_SIZE),
             )
-            .unwrap()
+            .expect("Chart stuff")
             .label("Kills")
             .legend(|(x, y)| Rectangle::new([(x, y + 2), (x + 15, y + 1)], GREEN));
 
@@ -174,7 +177,7 @@ impl Chart<Message> for KDAChart {
                 )
                 .point_size(POINT_SIZE),
             )
-            .unwrap()
+            .expect("Chart stuff")
             .label("Deaths")
             .legend(|(x, y)| Rectangle::new([(x, y + 2), (x + 15, y + 1)], RED));
 
@@ -190,7 +193,7 @@ impl Chart<Message> for KDAChart {
                 )
                 .point_size(POINT_SIZE),
             )
-            .unwrap()
+            .expect("Chart stuff")
             .label("Assists")
             .legend(|(x, y)| Rectangle::new([(x, y + 2), (x + 15, y + 1)], BLUE));
 
@@ -202,7 +205,7 @@ impl Chart<Message> for KDAChart {
         //                 .map(|(i, &a)| (self.kills[a].tick.0, i + 1)),
         //     POINT_SIZE,
         //     YELLOW
-        // )).unwrap();
+        // )).expect("Chart stuff");
 
         chart
             .configure_series_labels()
@@ -210,7 +213,7 @@ impl Chart<Message> for KDAChart {
             .margin(10)
             .background_style(self.col)
             .draw()
-            .unwrap();
+            .expect("Chart stuff");
     }
 }
 
@@ -221,6 +224,7 @@ pub fn view(state: &App) -> IcedElement<'_> {
         .into()
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn format_fn(c: &u32) -> String {
     format!("{}k", c / 1000)
 }

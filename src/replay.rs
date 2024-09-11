@@ -125,7 +125,7 @@ impl ReplayState {
     }
 
     pub fn view<'a>(&'a self, state: &'a App) -> IcedElement<'a> {
-        view(state).into()
+        view(state)
     }
 
     pub fn set_demo_path(&mut self, path: PathBuf) {

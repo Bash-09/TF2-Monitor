@@ -183,10 +183,12 @@ impl AnalysedDemo {
         };
 
         // Total number of bits in the demo
+        #[allow(clippy::cast_precision_loss)]
         let progress_total = (demo_bytes.len() * 8) as f32;
         // Number of bits processed at the time of the last progress update
         let mut last_progress_update = 0;
         // Number of bits to process between progress updates
+        #[allow(clippy::items_after_statements)]
         const PROGRESS_INTERVAL: usize = 100_000;
 
         // Do the gameplay analysis
@@ -268,6 +270,7 @@ impl AnalysedDemo {
             if current_progress_bytes - last_progress_update >= PROGRESS_INTERVAL {
                 last_progress_update = current_progress_bytes;
                 if let Some(updater) = &mut progress {
+                    #[allow(clippy::cast_precision_loss)]
                     updater.update_progress(progress::Progress::InProgress(
                         last_progress_update as f32 / progress_total,
                     ));
@@ -466,6 +469,11 @@ impl AnalysedDemo {
         analysed_demo.interval_per_tick = meta.interval_per_tick;
 
         // Scale time
+        #[allow(
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss
+        )]
         analysed_demo.players.values_mut().for_each(|p| {
             p.class_details.iter_mut().for_each(|d| {
                 d.time = (d.time as f32 * analysed_demo.interval_per_tick) as u32;

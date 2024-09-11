@@ -50,7 +50,3 @@ uuid = { version = "1.8.0", features = ["serde", "v4"] }
 pot = "3.0.0"
 md5 = "0.7.0"
 steam-rs = { git = "https://github.com/Bash-09/steam-rs" } # Steam API
-
-[build-dependencies]
-embed-resource = "2.4.2"
-ico = "0.3.0"

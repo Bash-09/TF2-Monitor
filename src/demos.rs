@@ -176,31 +176,35 @@ impl From<DemosMessage> for Message {
 
 #[derive(Default)]
 pub enum MaybeAnalysedDemo {
-    Analysed(AnalysedDemo),
+    Analysed(Box<AnalysedDemo>),
     InProgress(progress::Checker),
     #[default]
     Uninit,
 }
 
 impl MaybeAnalysedDemo {
+    #[must_use]
     pub const fn get_demo(&self) -> Option<&AnalysedDemo> {
         if let Self::Analysed(demo) = self {
             return Some(demo);
         }
         None
     }
+    #[must_use]
     pub const fn is_analysed(&self) -> bool {
         if let Self::Analysed(_) = self {
             return true;
         }
         false
     }
+    #[must_use]
     pub const fn is_analyzing(&self) -> bool {
         if let Self::InProgress(_) = self {
             return true;
         }
         false
     }
+    #[must_use]
     pub fn analysing_progress(&self) -> Option<Progress> {
         if let Self::InProgress(checker) = self {
             return Some(checker.check_progress());
@@ -304,7 +308,7 @@ impl State {
                     state
                         .demos
                         .analysed_demos
-                        .insert(hash, MaybeAnalysedDemo::Analysed(*analysed_demo));
+                        .insert(hash, MaybeAnalysedDemo::Analysed(analysed_demo));
 
                     if let View::AnalysedDemo(demo) = state.settings.view {
                         if state
@@ -734,7 +738,7 @@ impl Default for Filters {
 }
 
 impl SortBy {
-    pub fn sort(&self, demos: &mut [(usize, &Demo)], state: &App) {
+    pub fn sort(&self, demos: &mut [(usize, &Demo)], _state: &App) {
         match self {
             Self::FileName => {
                 demos.sort_by_key(|(_, d)| d.name.as_str());

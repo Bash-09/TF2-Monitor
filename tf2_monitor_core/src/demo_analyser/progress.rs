@@ -16,12 +16,17 @@ pub struct Updater {
 }
 
 impl Checker {
+    /// # Panics
+    /// If the lock is poisoned
+    #[must_use]
     pub fn check_progress(&self) -> Progress {
         *self.inner.lock().expect("Epic fail")
     }
 }
 
 impl Updater {
+    /// # Panics
+    /// If the lock is poisoned
     pub fn update_progress(&mut self, progress: Progress) {
         *self.inner.lock().expect("Epic fail") = progress;
     }
