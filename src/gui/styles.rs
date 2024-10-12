@@ -45,6 +45,11 @@ pub mod colours {
     }
 
     #[must_use]
+    pub const fn purple() -> Color {
+        Color::from_rgb(1.0, 0.2, 1.0)
+    }
+
+    #[must_use]
     pub fn team_red() -> Color {
         Color::from_rgb(184.0 / 255.0, 56.0 / 255.0, 59.0 / 255.0)
     }

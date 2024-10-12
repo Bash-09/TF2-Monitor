@@ -105,6 +105,7 @@ pub fn find_steam_user_friends(steamid: SteamID) -> Result<Vec<Friend>, Error> {
             steamid,
             friend_since: 0,
         })
+        .filter(|f| f.steamid != steamid)
         .collect();
 
     Ok(friends)

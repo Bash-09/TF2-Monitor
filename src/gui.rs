@@ -135,7 +135,7 @@ pub fn open_profile_button<'a>(
             "https://steamcommunity.com/profiles/{}",
             u64::from(steamid)
         ))),
-        widget::text("Open Profile").size(FONT_SIZE),
+        widget::text("Open Steam Profile").size(FONT_SIZE),
         iced::widget::tooltip::Position::Bottom,
     )
     .style(theme::Container::Box)
@@ -154,8 +154,12 @@ pub fn copy_button_with_text<'a>(button_text: impl ToString) -> Tooltip<'a, Mess
 }
 
 #[must_use]
-pub fn copy_button<'a>(to_copy: String) -> Button<'a, Message> {
-    Button::new(widget::text("Copy").size(FONT_SIZE)).on_press(Message::CopyToClipboard(to_copy))
+pub fn copy_button<'a>(text: &str, to_copy: String) -> IcedElement<'a> {
+    tooltip(
+        Button::new(widget::text(text).size(FONT_SIZE)).on_press(Message::CopyToClipboard(to_copy)),
+        widget::text("Copy").size(FONT_SIZE),
+    )
+    .into()
 }
 
 #[must_use]

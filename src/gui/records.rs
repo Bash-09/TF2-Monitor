@@ -149,7 +149,7 @@ fn row(state: &App, steamid: SteamID) -> IcedElement<'_> {
         Button::new(text(format!("{}", u64::from(steamid))).size(FONT_SIZE))
             .on_press(crate::Message::SelectPlayer(steamid)),
     );
-    contents = contents.push(copy_button(format!("{}", u64::from(steamid))));
+    contents = contents.push(copy_button("Copy", format!("{}", u64::from(steamid))));
     contents = contents.push(open_profile_button("Open", steamid));
 
     // Pfp

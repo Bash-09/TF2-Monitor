@@ -72,7 +72,10 @@ pub fn detailed_player_view(state: &App, player: SteamID) -> IcedElement<'_> {
                 .iter()
                 .for_each(|n| tooltip_text.push_str(&format!("{n}\n")));
 
-            name = name.push(tooltip(name_text, widget::text(tooltip_text)));
+            name = name.push(tooltip(
+                name_text,
+                widget::text(tooltip_text).size(FONT_SIZE),
+            ));
         }
         _ => {
             name = name.push(widget::text(name_text));
@@ -96,8 +99,8 @@ pub fn detailed_player_view(state: &App, player: SteamID) -> IcedElement<'_> {
             maybe_record.map(PlayerRecord::verdict).unwrap_or_default(),
             player
         ),
-        open_profile_button(steamid_text.clone(), player),
-        copy_button(steamid_text)
+        copy_button(&steamid_text, steamid_text.clone()),
+        open_profile_button("Open", player),
     ]
     .align_items(iced::Alignment::Center)
     .spacing(10);
@@ -380,21 +383,6 @@ pub fn badges<'a>(
 ) -> widget::Row<'a, Message, iced::Theme, iced::Renderer> {
     let mut contents = widget::row![].spacing(15);
 
-    if let Some(game_info) = game_info {
-        // Spawning
-        if game_info.state == PlayerState::Spawning {
-            contents = contents.push(tooltip(icon(icons::JOINING), widget::text("Joining")));
-        }
-
-        // Disconnected
-        if game_info.state == PlayerState::Disconnected {
-            contents = contents.push(tooltip(
-                icon(icons::DISCONNECT),
-                widget::text("Disconnected"),
-            ));
-        }
-    }
-
     if let Some(steam) = state.mac.players.steam_info.get(&player) {
         // Private / Friends only profile
         if matches!(
@@ -481,26 +469,56 @@ pub fn badges<'a>(
         contents = contents.push(tooltip(icon(icons::NOTES), widget::text(notes)));
     }
 
+    if let Some(game_info) = game_info {
+        // Spawning
+        if game_info.state == PlayerState::Spawning {
+            contents = contents.push(tooltip(icon(icons::JOINING), widget::text("Joining")));
+        }
+
+        // Disconnected
+        if game_info.state == PlayerState::Disconnected {
+            contents = contents.push(tooltip(
+                icon(icons::DISCONNECT),
+                widget::text("Disconnected"),
+            ));
+        }
+    }
+
     // Vote
     if let Some(vote) = state.mac.server.vote_history().last() {
-        if let Some(vote_cast) = vote
+        if let Some((i, vote_cast)) = vote
             .votes
             .iter()
-            .find(|v| v.steamid.is_some_and(|s| s == player))
+            .enumerate()
+            .find(|(_, v)| v.steamid.is_some_and(|s| s == player))
         {
             let option = vote.options.get(vote_cast.option as usize);
 
             if option.is_some_and(|o| o == "Yes") {
-                contents = contents.push(tooltip(
-                    icon(icons::TICK).style(colours::green()),
-                    "Voted Yes",
-                ));
+                if i < 2 {
+                    contents = contents.push(tooltip(
+                        icon(icons::TICK).style(colours::yellow()),
+                        "Vote Initiator",
+                    ));
+                } else {
+                    contents = contents.push(tooltip(
+                        icon(icons::TICK).style(colours::green()),
+                        "Voted Yes",
+                    ));
+                }
             }
             if option.is_some_and(|o| o == "No") {
-                contents = contents.push(tooltip(
-                    icon(icons::CROSS).style(colours::red()),
-                    "Voted No",
-                ));
+                if i < 2 {
+                    contents = contents.push(tooltip(
+                        icon(icons::CROSS).style(colours::pink()),
+                        "Vote Target",
+                    ));
+                } else {
+                    contents = contents.push(tooltip(
+                        icon(icons::CROSS).style(colours::red()),
+                        "Voted No",
+                    ));
+                }
             }
         }
     }
