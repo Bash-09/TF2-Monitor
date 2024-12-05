@@ -25,7 +25,6 @@ If you'd like to try it out yourself, grab the app from the [releases](https://g
   - Game information such as their team, ping and k/d
   - Steam Profile information (including all the at-a-glance information mentioned above, but in more detail)
 - View the chat and killfeed history of the match
-  - Click on the player's name to view more about their account!
 - Review the all the players who currently have any information recorded
   - Filtering options such as whitelisting specific verdicts, or searching for a steamid, name, or note attached to a player
 - Compatible with the [MAC Client](https://github.com/MegaAntiCheat/client-backend), allowing you to contribute to demo collection using this client
@@ -33,7 +32,9 @@ If you'd like to try it out yourself, grab the app from the [releases](https://g
 ![image](https://github.com/Bash-09/MAC-Desktop/assets/47521168/12fc2fb6-ada5-4fa4-bdbf-28d52b6f4d08)
 
 # Setup
-1. Download one of the [releases](https://github.com/Bash-09/TF2-Monitor/releases) or build the app yourself.
+I recommend compiling the app yourself to get the latest features that I haven't bothered to put in the release. This includes indicators to see who voted yes/no for a votekick, a simple demo to replay converter, and analysis of all your recorded demos including some game statistics and class playtime.
+
+1. Download one of the [releases](https://github.com/Bash-09/TF2-Monitor/releases) or build the app yourself by [installing Rust](https://www.rust-lang.org/tools/install) and running `cargo run --release` inside the TF2-Monitor folder.
 2. Add `-usercon -condebug -conclearlog -g15` to your TF2 launch options (Right click Team Fortress 2 in your Steam library -> Properties -> Paste into the "Launch Options" input field)
 3. Add the following to your `autoexec.cfg` file (you may need to [create your autoexec](https://steamcommunity.com/sharedfiles/filedetails/?id=3112357964) in the first place)
   - If you use mastercomfig, you will need to place your autoexec file inside the `overrides` folder inside your `cfg` folder (if `overrides` doesn't exist, just create it)
