@@ -486,39 +486,24 @@ pub fn badges<'a>(
 
     // Vote
     if let Some(vote) = state.mac.server.vote_history().last() {
-        if let Some((i, vote_cast)) = vote
+        if let Some(vote_cast) = vote
             .votes
             .iter()
-            .enumerate()
-            .find(|(_, v)| v.steamid.is_some_and(|s| s == player))
+            .find(|v| v.steamid.is_some_and(|s| s == player))
         {
             let option = vote.options.get(vote_cast.option as usize);
 
             if option.is_some_and(|o| o == "Yes") {
-                if i < 2 {
-                    contents = contents.push(tooltip(
-                        icon(icons::TICK).style(colours::yellow()),
-                        "Vote Initiator",
-                    ));
-                } else {
-                    contents = contents.push(tooltip(
-                        icon(icons::TICK).style(colours::green()),
-                        "Voted Yes",
-                    ));
-                }
+                contents = contents.push(tooltip(
+                    icon(icons::TICK).style(colours::green()),
+                    "Voted Yes",
+                ));
             }
             if option.is_some_and(|o| o == "No") {
-                if i < 2 {
-                    contents = contents.push(tooltip(
-                        icon(icons::CROSS).style(colours::pink()),
-                        "Vote Target",
-                    ));
-                } else {
-                    contents = contents.push(tooltip(
-                        icon(icons::CROSS).style(colours::red()),
-                        "Voted No",
-                    ));
-                }
+                contents = contents.push(tooltip(
+                    icon(icons::CROSS).style(colours::red()),
+                    "Voted No",
+                ));
             }
         }
     }
